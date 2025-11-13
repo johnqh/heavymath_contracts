@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist/unified",
+    "module": "ESNext",
+    "target": "ES2020",
+    "moduleResolution": "node10",
+    "ignoreDeprecations": "5.0",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "jsx": "react"
+  },
+  "include": [
+    "src/unified/**/*",
+    "src/utils/**/*",
+    "src/evm/**/*",
+    "src/solana/**/*",
+    "src/react/**/*",
+    "typechain-types/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test/**/*",
+    "target/types/**/*"
+  ]
+}

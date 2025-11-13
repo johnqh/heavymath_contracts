@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist/evm",
+    "rootDir": "."
+  },
+  "include": [
+    "src/evm/**/*",
+    "src/utils/**/*",
+    "typechain-types/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test/**/*"
+  ]
+}
