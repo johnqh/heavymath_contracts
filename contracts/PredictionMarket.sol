@@ -68,6 +68,7 @@ contract PredictionMarket is
         uint256 dealerFeeBps; // Dealer fee in basis points
         MarketStatus status; // Market status
         uint256 resolution; // Resolved percentage (0-100)
+        uint256 equilibrium; // Calculated equilibrium point (0-100)
     }
 
     /// @notice Prediction struct
@@ -120,7 +121,8 @@ contract PredictionMarket is
 
     event MarketResolved(
         uint256 indexed marketId,
-        uint256 resolution
+        uint256 resolution,
+        uint256 equilibrium
     );
 
     event MarketAbandoned(uint256 indexed marketId);
@@ -199,7 +201,8 @@ contract PredictionMarket is
             createdAt: block.timestamp,
             dealerFeeBps: MIN_DEALER_FEE_BPS, // Default to minimum fee
             status: MarketStatus.Active,
-            resolution: 0
+            resolution: 0,
+            equilibrium: 0
         });
 
         emit MarketCreated(
@@ -314,10 +317,14 @@ contract PredictionMarket is
         require(block.timestamp >= market.deadline, "Market still active");
         require(resolution <= 100, "Invalid resolution");
 
+        // Calculate equilibrium
+        uint256 equilibrium = calculateEquilibrium(marketId);
+
         market.status = MarketStatus.Resolved;
         market.resolution = resolution;
+        market.equilibrium = equilibrium;
 
-        emit MarketResolved(marketId, resolution);
+        emit MarketResolved(marketId, resolution, equilibrium);
     }
 
     /**
@@ -332,6 +339,142 @@ contract PredictionMarket is
      */
     function unpause() external onlyOwner {
         _unpause();
+    }
+
+    /**
+     * @notice Calculate equilibrium point for a market
+     * @param marketId Market ID
+     * @return Equilibrium percentage (0-100)
+     * @dev O(101) algorithm: finds point where total_below/total_above = percentage/(100-percentage)
+     */
+    function calculateEquilibrium(uint256 marketId) public view returns (uint256) {
+        // Build cumulative totals for each percentage point
+        uint256[101] memory cumulativeBelow;
+        uint256[101] memory cumulativeAbove;
+
+        // First, get total for each percentage
+        uint256[101] memory percentageTotalsArray;
+        for (uint256 i = 0; i <= 100; i++) {
+            percentageTotalsArray[i] = percentageTotals[marketId][i];
+        }
+
+        // Calculate cumulative below (sum of all percentages < current)
+        for (uint256 i = 0; i <= 100; i++) {
+            if (i == 0) {
+                cumulativeBelow[i] = 0;
+            } else {
+                cumulativeBelow[i] = cumulativeBelow[i - 1] + percentageTotalsArray[i - 1];
+            }
+        }
+
+        // Calculate cumulative above (sum of all percentages > current)
+        for (uint256 i = 0; i <= 100; i++) {
+            uint256 totalAbove = 0;
+            for (uint256 j = i + 1; j <= 100; j++) {
+                totalAbove += percentageTotalsArray[j];
+            }
+            cumulativeAbove[i] = totalAbove;
+        }
+
+        // Find equilibrium: where ratio matches percentage odds
+        // We want: total_below / total_above ≈ percentage / (100 - percentage)
+        // Or: total_below * (100 - percentage) ≈ total_above * percentage
+
+        uint256 bestEquilibrium = 0;
+        uint256 bestDifference = type(uint256).max;
+
+        for (uint256 p = 1; p < 100; p++) {
+            uint256 below = cumulativeBelow[p];
+            uint256 above = cumulativeAbove[p];
+
+            // Skip if both sides are zero (no predictions)
+            if (below == 0 && above == 0) {
+                continue;
+            }
+
+            // Calculate difference using a ratio-based approach
+            // We want: below / above ≈ p / (100 - p)
+            // Cross multiply: below * (100 - p) ≈ above * p
+
+            uint256 leftSide = below * (100 - p);
+            uint256 rightSide = above * p;
+            uint256 difference;
+
+            if (leftSide > rightSide) {
+                difference = leftSide - rightSide;
+            } else {
+                difference = rightSide - leftSide;
+            }
+
+            // Update best equilibrium if this is closer to balance
+            if (difference < bestDifference) {
+                bestDifference = difference;
+                bestEquilibrium = p;
+            }
+        }
+
+        return bestEquilibrium;
+    }
+
+    /**
+     * @notice Check if a predictor is a winner
+     * @param marketId Market ID
+     * @param predictor Predictor address
+     * @return True if predictor won
+     * @dev Winner = predicted on same side of equilibrium as actual result
+     */
+    function isWinner(uint256 marketId, address predictor) public view returns (bool) {
+        Market storage market = markets[marketId];
+        require(market.status == MarketStatus.Resolved, "Market not resolved");
+
+        Prediction storage prediction = predictions[marketId][predictor];
+        require(prediction.amount > 0, "No prediction");
+
+        uint256 equilibrium = market.equilibrium;
+        uint256 resolution = market.resolution;
+        uint256 predicted = prediction.percentage;
+
+        // Auto-refund if predicted exactly at equilibrium
+        if (predicted == equilibrium) {
+            return false;
+        }
+
+        // Winner if on same side as resolution
+        if (resolution > equilibrium) {
+            // Result is above equilibrium, winners predicted above equilibrium
+            return predicted > equilibrium;
+        } else if (resolution < equilibrium) {
+            // Result is below equilibrium, winners predicted below equilibrium
+            return predicted < equilibrium;
+        } else {
+            // Resolution exactly at equilibrium - no winners
+            return false;
+        }
+    }
+
+    /**
+     * @notice Get refund amount for a predictor (if at equilibrium)
+     * @param marketId Market ID
+     * @param predictor Predictor address
+     * @return Refund amount
+     */
+    function getRefundAmount(uint256 marketId, address predictor) public view returns (uint256) {
+        Market storage market = markets[marketId];
+        if (market.status != MarketStatus.Resolved) {
+            return 0;
+        }
+
+        Prediction storage prediction = predictions[marketId][predictor];
+        if (prediction.amount == 0) {
+            return 0;
+        }
+
+        // Refund if predicted exactly at equilibrium
+        if (prediction.percentage == market.equilibrium) {
+            return prediction.amount;
+        }
+
+        return 0;
     }
 
     /**
