@@ -1,9 +1,9 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-viem";
 import "@nomicfoundation/hardhat-verify";
-import "@nomicfoundation/hardhat-chai-matchers";
+// import "@nomicfoundation/hardhat-chai-matchers"; // Commented out - requires ethers, we use viem
 import "@typechain/hardhat";
-import "@openzeppelin/hardhat-upgrades";
+// import "@openzeppelin/hardhat-upgrades"; // Commented out - requires ethers, we manually deploy proxies
 import "hardhat-gas-reporter";
 import * as dotenv from "dotenv";
 import * as fs from "fs";
