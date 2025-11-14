@@ -99,6 +99,18 @@ contract PredictionMarket is
     /// @notice Total amount per percentage point: marketId => percentage => total amount
     mapping(uint256 => mapping(uint256 => uint256)) public percentageTotals;
 
+    /// @notice Total pool for each market: marketId => total amount
+    mapping(uint256 => uint256) public marketPools;
+
+    /// @notice Collected dealer fees: marketId => fee amount
+    mapping(uint256 => uint256) public dealerFees;
+
+    /// @notice Collected system fees: marketId => fee amount
+    mapping(uint256 => uint256) public systemFees;
+
+    /// @notice Total accumulated system fees (withdrawable by owner)
+    uint256 public totalSystemFees;
+
     /// @notice Events
     event MarketCreated(
         uint256 indexed marketId,
@@ -139,6 +151,20 @@ contract PredictionMarket is
         address indexed predictor,
         uint256 amount
     );
+
+    event RefundClaimed(
+        uint256 indexed marketId,
+        address indexed predictor,
+        uint256 amount
+    );
+
+    event DealerFeesWithdrawn(
+        uint256 indexed marketId,
+        address indexed dealer,
+        uint256 amount
+    );
+
+    event SystemFeesWithdrawn(address indexed recipient, uint256 amount);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -272,8 +298,9 @@ contract PredictionMarket is
         prediction.placedAt = block.timestamp;
         prediction.claimed = false;
 
-        // Update percentage totals
+        // Update percentage totals and market pool
         percentageTotals[marketId][percentage] += msg.value;
+        marketPools[marketId] += msg.value;
 
         emit PredictionPlaced(marketId, msg.sender, msg.value, percentage);
     }
@@ -309,8 +336,9 @@ contract PredictionMarket is
         prediction.amount += additionalAmount;
         prediction.percentage = newPercentage;
 
-        // Add new percentage total
+        // Add new percentage total and update market pool
         percentageTotals[marketId][newPercentage] += prediction.amount;
+        marketPools[marketId] += additionalAmount;
 
         emit PredictionUpdated(marketId, msg.sender, prediction.amount, newPercentage);
     }
@@ -516,6 +544,184 @@ contract PredictionMarket is
         }
 
         return 0;
+    }
+
+    /**
+     * @notice Calculate total winning bets for a market
+     * @param marketId Market ID
+     * @return Total amount on winning side
+     */
+    function _calculateTotalWinningBets(uint256 marketId)
+        internal
+        view
+        returns (uint256)
+    {
+        Market storage market = markets[marketId];
+        uint256 totalWinningBets = 0;
+        uint256 equilibrium = market.equilibrium;
+        uint256 resolution = market.resolution;
+
+        for (uint256 i = 0; i <= 100; i++) {
+            uint256 amount = percentageTotals[marketId][i];
+            if (amount > 0 && i != equilibrium) {
+                if (
+                    (resolution > equilibrium && i > equilibrium) ||
+                    (resolution < equilibrium && i < equilibrium)
+                ) {
+                    totalWinningBets += amount;
+                }
+            }
+        }
+
+        return totalWinningBets;
+    }
+
+    /**
+     * @notice Calculate payout for a winner
+     * @param marketId Market ID
+     * @param predictor Predictor address
+     * @return Payout amount
+     * @dev Calculates proportional share of winner pool after fees
+     */
+    function calculatePayout(uint256 marketId, address predictor)
+        public
+        view
+        returns (uint256)
+    {
+        Market storage market = markets[marketId];
+        if (market.status != MarketStatus.Resolved) {
+            return 0;
+        }
+
+        Prediction storage prediction = predictions[marketId][predictor];
+        if (prediction.amount == 0 || prediction.claimed) {
+            return 0;
+        }
+
+        // Check if winner
+        if (!isWinner(marketId, predictor)) {
+            return 0;
+        }
+
+        // Calculate fees
+        uint256 totalPool = marketPools[marketId];
+        uint256 dealerFee = (totalPool * market.dealerFeeBps) / 10000;
+        uint256 systemFee = (dealerFee * SYSTEM_FEE_PERCENT) / 100;
+
+        // Winner pool = total pool - fees
+        uint256 winnerPool = totalPool - dealerFee - systemFee;
+
+        // Get total winning bets
+        uint256 totalWinningBets = _calculateTotalWinningBets(marketId);
+
+        if (totalWinningBets == 0) {
+            return 0;
+        }
+
+        // Payout = (predictor_bet / total_winning_bets) * winner_pool
+        return (prediction.amount * winnerPool) / totalWinningBets;
+    }
+
+    /**
+     * @notice Claim winnings for a resolved market
+     * @param marketId Market ID
+     */
+    function claimWinnings(uint256 marketId) external nonReentrant {
+        Market storage market = markets[marketId];
+        require(market.status == MarketStatus.Resolved, "Market not resolved");
+
+        Prediction storage prediction = predictions[marketId][msg.sender];
+        require(prediction.amount > 0, "No prediction");
+        require(!prediction.claimed, "Already claimed");
+        require(isWinner(marketId, msg.sender), "Not a winner");
+
+        uint256 payout = calculatePayout(marketId, msg.sender);
+        require(payout > 0, "No payout");
+
+        // Mark as claimed
+        prediction.claimed = true;
+
+        // Transfer payout
+        (bool success, ) = msg.sender.call{value: payout}("");
+        require(success, "Transfer failed");
+
+        emit WinningsClaimed(marketId, msg.sender, payout);
+    }
+
+    /**
+     * @notice Claim refund for prediction at equilibrium
+     * @param marketId Market ID
+     */
+    function claimRefund(uint256 marketId) external nonReentrant {
+        Market storage market = markets[marketId];
+        require(market.status == MarketStatus.Resolved, "Market not resolved");
+
+        Prediction storage prediction = predictions[marketId][msg.sender];
+        require(prediction.amount > 0, "No prediction");
+        require(!prediction.claimed, "Already claimed");
+
+        uint256 refundAmount = getRefundAmount(marketId, msg.sender);
+        require(refundAmount > 0, "No refund");
+
+        // Mark as claimed
+        prediction.claimed = true;
+
+        // Transfer refund
+        (bool success, ) = msg.sender.call{value: refundAmount}("");
+        require(success, "Transfer failed");
+
+        emit RefundClaimed(marketId, msg.sender, refundAmount);
+    }
+
+    /**
+     * @notice Withdraw dealer fees for a resolved market
+     * @param marketId Market ID
+     */
+    function withdrawDealerFees(uint256 marketId) external nonReentrant {
+        Market storage market = markets[marketId];
+        require(market.status == MarketStatus.Resolved, "Market not resolved");
+        require(market.dealer == msg.sender, "Not market dealer");
+
+        uint256 feeAmount = dealerFees[marketId];
+        if (feeAmount == 0) {
+            // Calculate and store dealer fee
+            uint256 totalPool = marketPools[marketId];
+            uint256 dealerFeeBps = market.dealerFeeBps;
+            feeAmount = (totalPool * dealerFeeBps) / 10000;
+
+            dealerFees[marketId] = feeAmount;
+
+            // Also calculate and store system fee
+            uint256 systemFee = (feeAmount * SYSTEM_FEE_PERCENT) / 100;
+            systemFees[marketId] = systemFee;
+            totalSystemFees += systemFee;
+        }
+
+        require(feeAmount > 0, "No fees");
+
+        // Mark as withdrawn
+        dealerFees[marketId] = 0;
+
+        // Transfer fees
+        (bool success, ) = msg.sender.call{value: feeAmount}("");
+        require(success, "Transfer failed");
+
+        emit DealerFeesWithdrawn(marketId, msg.sender, feeAmount);
+    }
+
+    /**
+     * @notice Withdraw accumulated system fees (owner only)
+     */
+    function withdrawSystemFees() external onlyOwner nonReentrant {
+        uint256 amount = totalSystemFees;
+        require(amount > 0, "No fees");
+
+        totalSystemFees = 0;
+
+        (bool success, ) = msg.sender.call{value: amount}("");
+        require(success, "Transfer failed");
+
+        emit SystemFeesWithdrawn(msg.sender, amount);
     }
 
     /**
