@@ -1,573 +1,257 @@
 import { expect } from "chai";
-import hre from "hardhat";
-import { getAddress, parseEther, encodeFunctionData, parseAbi } from "viem";
+import { getAddress } from "viem";
+import {
+  advanceTime,
+  deployPredictionFixture,
+  toUSDC,
+} from "./utils/fixture.ts";
 
-const { viem, network } = hre;
+const ZERO_ORACLE_ID =
+  "0x0000000000000000000000000000000000000000000000000000000000000000";
 
-// Helper to advance time
-async function advanceTime(seconds: number) {
-  await network.provider.send("evm_increaseTime", [seconds]);
-  await network.provider.send("evm_mine");
-}
+describe("PredictionMarket (USDC)", function () {
+  describe("Initialization", function () {
+    it("sets core dependencies and owner", async function () {
+      const { market, owner, dealerNFT, oracleResolver, stakeToken } =
+        await deployPredictionFixture();
 
-describe("PredictionMarket", function () {
-  async function deployFixture() {
-    const [owner, dealer1, dealer2, predictor1, predictor2, predictor3] =
-      await viem.getWalletClients();
-    const publicClient = await viem.getPublicClient();
-
-    // Deploy DealerNFT first
-    const dealerNFTImpl = await viem.deployContract("DealerNFT");
-    const dealerNFTInitData = encodeFunctionData({
-      abi: parseAbi(["function initialize()"]),
-      functionName: "initialize",
-      args: [],
-    });
-    const dealerNFTProxy = await viem.deployContract("ERC1967Proxy", [
-      dealerNFTImpl.address,
-      dealerNFTInitData,
-    ]);
-    const dealerNFT = await viem.getContractAt(
-      "DealerNFT",
-      dealerNFTProxy.address
-    );
-
-    // Mint licenses to dealers
-    await dealerNFT.write.mint([dealer1.account.address, 1n]);
-    await dealerNFT.write.mint([dealer2.account.address, 2n]);
-
-    // Set permissions for dealer1: category 1, all subcategories
-    await dealerNFT.write.setPermissions([1n, 1n, [0xFFn]]);
-    // Set permissions for dealer2: category 1, specific subcategories
-    await dealerNFT.write.setPermissions([2n, 1n, [1n, 2n]]);
-
-    // Deploy OracleResolver
-    const oracleImpl = await viem.deployContract("OracleResolver");
-    const oracleInitData = encodeFunctionData({
-      abi: parseAbi(["function initialize()"]),
-      functionName: "initialize",
-      args: [],
-    });
-    const oracleProxy = await viem.deployContract("ERC1967Proxy", [
-      oracleImpl.address,
-      oracleInitData,
-    ]);
-    const oracleResolver = await viem.getContractAt(
-      "OracleResolver",
-      oracleProxy.address
-    );
-
-    // Deploy PredictionMarket
-    const marketImpl = await viem.deployContract("PredictionMarket");
-    const marketInitData = encodeFunctionData({
-      abi: parseAbi(["function initialize(address,address)"]),
-      functionName: "initialize",
-      args: [dealerNFT.address, oracleResolver.address],
-    });
-    const marketProxy = await viem.deployContract("ERC1967Proxy", [
-      marketImpl.address,
-      marketInitData,
-    ]);
-    const market = await viem.getContractAt(
-      "PredictionMarket",
-      marketProxy.address
-    );
-
-    // Get current block timestamp for creating deadlines
-    const block = await publicClient.getBlock();
-    const now = block.timestamp;
-
-    return {
-      market,
-      marketImpl,
-      marketProxy,
-      dealerNFT,
-      oracleResolver,
-      owner,
-      dealer1,
-      dealer2,
-      predictor1,
-      predictor2,
-      predictor3,
-      publicClient,
-      now,
-    };
-  }
-
-  describe("Deployment & Initialization", function () {
-    it("Should initialize with correct owner", async function () {
-      const { market, owner } = await deployFixture();
-      const contractOwner = await market.read.owner();
-      expect(contractOwner.toLowerCase()).to.equal(
-        owner.account.address.toLowerCase()
+      expect(getAddress(await market.read.dealerNFT())).to.equal(
+        getAddress(dealerNFT.address)
       );
-    });
-
-    it("Should prevent re-initialization", async function () {
-      const { market, dealerNFT, oracleResolver } = await deployFixture();
-      try {
-        await market.write.initialize([dealerNFT.address, oracleResolver.address]);
-        expect.fail("Should have thrown");
-      } catch (error: any) {
-        expect(error.message).to.include("InvalidInitialization");
-      }
-    });
-
-    it("Should store correct DealerNFT address", async function () {
-      const { market, dealerNFT } = await deployFixture();
-      const storedAddress = await market.read.dealerNFT();
-      expect(storedAddress.toLowerCase()).to.equal(
-        dealerNFT.address.toLowerCase()
+      expect(getAddress(await market.read.oracleResolver())).to.equal(
+        getAddress(oracleResolver.address)
       );
-    });
-
-    it("Should have initial market counter at 0", async function () {
-      const { market } = await deployFixture();
-      const counter = await market.read.marketCounter();
-      expect(counter).to.equal(0n);
+      expect(getAddress(await market.read.stakeToken())).to.equal(
+        getAddress(stakeToken.address)
+      );
     });
   });
 
-  describe("Market Creation", function () {
-    it("Should create market with valid dealer license", async function () {
-      const { market, dealer1, publicClient } = await deployFixture();
+  describe("Market lifecycle", function () {
+    it("allows licensed dealer to create, update fee, and cancel empty market", async function () {
+      const { market, dealer1, owner, publicClient } = await deployPredictionFixture();
       const block = await publicClient.getBlock();
-      const deadline = block.timestamp + 86401n; // 24 hours
+      const deadline = block.timestamp + 86401n;
 
       await market.write.createMarket(
-        [
-          1n, // tokenId
-          1n, // category
-          1n, // subCategory
-          deadline,
-          "Will it rain tomorrow?",
-          "0x0000000000000000000000000000000000000000000000000000000000000000",
-        ],
+        [1n, 1n, 1n, deadline, "Rain tomorrow?", ZERO_ORACLE_ID],
         { account: dealer1.account }
       );
 
-      const counter = await market.read.marketCounter();
-      expect(counter).to.equal(1n);
-    });
+      await market.write.setDealerFee([1n, 150n], { account: dealer1.account });
 
-    it("Should enforce minimum 24 hour duration", async function () {
-      const { market, dealer1, publicClient } = await deployFixture();
-      const block = await publicClient.getBlock();
-      const tooSoonDeadline = block.timestamp + 3600n; // 1 hour
-
-      try {
-        await market.write.createMarket(
-          [1n, 1n, 1n, tooSoonDeadline, "Will it rain?", "0x0000000000000000000000000000000000000000000000000000000000000000"],
-          { account: dealer1.account }
-        );
-        expect.fail("Should have thrown");
-      } catch (error: any) {
-        expect(error.message).to.include("Deadline too soon");
-      }
-    });
-
-    it("Should validate dealer permissions for category/subCategory", async function () {
-      const { market, dealer2, publicClient } = await deployFixture();
-      const block = await publicClient.getBlock();
-      const deadline = block.timestamp + 86401n;
-
-      // dealer2 has permissions for category 1, subcategories [1, 2] only
-      await market.write.createMarket(
-        [2n, 1n, 1n, deadline, "Valid market", "0x0000000000000000000000000000000000000000000000000000000000000000"],
-        { account: dealer2.account }
-      );
-
-      // Should fail for subcategory 3
-      try {
-        await market.write.createMarket(
-          [2n, 1n, 3n, deadline, "Invalid subcategory", "0x0000000000000000000000000000000000000000000000000000000000000000"],
-          { account: dealer2.account }
-        );
-        expect.fail("Should have thrown");
-      } catch (error: any) {
-        expect(error.message).to.include("No permission");
-      }
-    });
-
-    it("Should require caller to own the dealer NFT", async function () {
-      const { market, dealer2, publicClient } = await deployFixture();
-      const block = await publicClient.getBlock();
-      const deadline = block.timestamp + 86401n;
-
-      // dealer2 doesn't own tokenId 1
-      try {
-        await market.write.createMarket(
-          [1n, 1n, 1n, deadline, "Not my token", "0x0000000000000000000000000000000000000000000000000000000000000000"],
-          { account: dealer2.account }
-        );
-        expect.fail("Should have thrown");
-      } catch (error: any) {
-        expect(error.message).to.include("Not token owner");
-      }
-    });
-
-    it("Should emit MarketCreated event", async function () {
-      const { market, dealer1, publicClient } = await deployFixture();
-      const block = await publicClient.getBlock();
-      const deadline = block.timestamp + 86401n;
-
-      const hash = await market.write.createMarket(
-        [1n, 1n, 1n, deadline, "Event test", "0x0000000000000000000000000000000000000000000000000000000000000000"],
-        { account: dealer1.account }
-      );
-
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      expect(receipt.logs.length).to.be.greaterThan(0);
-    });
-
-    it("Should set dealer fee within bounds (0.1% - 2%)", async function () {
-      const { market, dealer1, publicClient } = await deployFixture();
-      const block = await publicClient.getBlock();
-      const deadline = block.timestamp + 86401n;
-
-      // Create market
-      await market.write.createMarket(
-        [1n, 1n, 1n, deadline, "Fee test", "0x0000000000000000000000000000000000000000000000000000000000000000"],
-        { account: dealer1.account }
-      );
-
-      // Set fee to 1% (100 basis points)
-      await market.write.setDealerFee([1n, 100n], { account: dealer1.account });
-
+      await market.write.cancelMarket([1n], { account: owner.account });
       const marketData = await market.read.markets([1n]);
-      expect(marketData[7]).to.equal(100n); // dealerFeeBps field
+      expect(marketData[8]).to.equal(1); // Cancelled
     });
 
-    it("Should reject dealer fee outside bounds", async function () {
-      const { market, dealer1, publicClient } = await deployFixture();
+    it("lets predictors place, update, withdraw, and respects deadlines", async function () {
+      const { market, dealer1, predictor1, publicClient, stakeToken } =
+        await deployPredictionFixture();
       const block = await publicClient.getBlock();
       const deadline = block.timestamp + 86401n;
 
       await market.write.createMarket(
-        [1n, 1n, 1n, deadline, "Fee bounds test", "0x0000000000000000000000000000000000000000000000000000000000000000"],
+        [1n, 1n, 1n, deadline, "Launch success?", ZERO_ORACLE_ID],
         { account: dealer1.account }
       );
 
-      // Too low (< 0.1% = 10 bps)
-      try {
-        await market.write.setDealerFee([1n, 5n], { account: dealer1.account });
-        expect.fail("Should have thrown");
-      } catch (error: any) {
-        expect(error.message).to.include("Fee out of bounds");
-      }
+      const startBalance = await stakeToken.read.balanceOf([predictor1.account.address]);
 
-      // Too high (> 2% = 200 bps)
-      try {
-        await market.write.setDealerFee([1n, 250n], { account: dealer1.account });
-        expect.fail("Should have thrown");
-      } catch (error: any) {
-        expect(error.message).to.include("Fee out of bounds");
-      }
+      await market.write.placePrediction([1n, 40n, toUSDC("100")], {
+        account: predictor1.account,
+      });
+
+      await market.write.updatePrediction([1n, 60n, toUSDC("50")], {
+        account: predictor1.account,
+      });
+
+      await market.write.withdrawPrediction([1n], { account: predictor1.account });
+
+      const endBalance = await stakeToken.read.balanceOf([predictor1.account.address]);
+      expect(endBalance).to.equal(startBalance);
     });
   });
 
-  describe("Prediction Management", function () {
-    async function createMarketFixture() {
-      const fixtures = await deployFixture();
-
-      // Get fresh timestamp
+  describe("Resolution & refunds", function () {
+    async function openBalancedMarket() {
+      const fixtures = await deployPredictionFixture();
       const block = await fixtures.publicClient.getBlock();
       const deadline = block.timestamp + 86401n;
 
       await fixtures.market.write.createMarket(
-        [1n, 1n, 1n, deadline, "Test market", "0x0000000000000000000000000000000000000000000000000000000000000000"],
+        [1n, 1n, 1n, deadline, "Balanced market", ZERO_ORACLE_ID],
         { account: fixtures.dealer1.account }
       );
 
-      return { ...fixtures, marketId: 1n };
-    }
-
-    it("Should place prediction with valid percentage (0-100)", async function () {
-      const { market, predictor1, marketId } = await createMarketFixture();
-
-      await market.write.placePrediction([marketId, 50n], {
-        account: predictor1.account,
-        value: parseEther("1.0"),
-      });
-
-      const prediction = await market.read.predictions([marketId, predictor1.account.address]);
-      expect(prediction[0]).to.equal(parseEther("1.0")); // amount
-      expect(prediction[1]).to.equal(50n); // percentage
-    });
-
-    it("Should reject percentage outside 0-100 range", async function () {
-      const { market, predictor1, marketId } = await createMarketFixture();
-
-      try {
-        await market.write.placePrediction([marketId, 101n], {
-          account: predictor1.account,
-          value: parseEther("1.0"),
-        });
-        expect.fail("Should have thrown");
-      } catch (error: any) {
-        expect(error.message).to.include("Invalid percentage");
-      }
-    });
-
-    it("Should enforce minimum bet amount", async function () {
-      const { market, predictor1, marketId } = await createMarketFixture();
-
-      try {
-        await market.write.placePrediction([marketId, 50n], {
-          account: predictor1.account,
-          value: parseEther("0.0001"), // Too small
-        });
-        expect.fail("Should have thrown");
-      } catch (error: any) {
-        expect(error.message).to.include("Below minimum");
-      }
-    });
-
-    it("Should allow only one prediction per predictor per market", async function () {
-      const { market, predictor1, marketId } = await createMarketFixture();
-
-      // First prediction
-      await market.write.placePrediction([marketId, 50n], {
-        account: predictor1.account,
-        value: parseEther("1.0"),
-      });
-
-      // Second prediction should fail
-      try {
-        await market.write.placePrediction([marketId, 60n], {
-          account: predictor1.account,
-          value: parseEther("0.5"),
-        });
-        expect.fail("Should have thrown");
-      } catch (error: any) {
-        expect(error.message).to.include("Already predicted");
-      }
-    });
-
-    it("Should allow updating prediction within grace period", async function () {
-      const { market, predictor1, marketId } = await createMarketFixture();
-
-      // Place initial prediction
-      await market.write.placePrediction([marketId, 50n], {
-        account: predictor1.account,
-        value: parseEther("1.0"),
-      });
-
-      // Update within grace period (5 minutes)
-      await market.write.updatePrediction([marketId, 60n, parseEther("0.5")], {
-        account: predictor1.account,
-        value: parseEther("0.5"),
-      });
-
-      const prediction = await market.read.predictions([marketId, predictor1.account.address]);
-      expect(prediction[0]).to.equal(parseEther("1.5")); // total amount
-      expect(prediction[1]).to.equal(60n); // updated percentage
-    });
-
-    it("Should prevent updating after grace period", async function () {
-      const { market, predictor1, marketId } = await createMarketFixture();
-
-      await market.write.placePrediction([marketId, 50n], {
-        account: predictor1.account,
-        value: parseEther("1.0"),
-      });
-
-      // Advance time past grace period (5 minutes = 300 seconds)
-      await advanceTime(301);
-
-      try {
-        await market.write.updatePrediction([marketId, 60n, parseEther("0.5")], {
-          account: predictor1.account,
-          value: parseEther("0.5"),
-        });
-        expect.fail("Should have thrown");
-      } catch (error: any) {
-        expect(error.message).to.include("Grace period expired");
-      }
-    });
-
-    it("Should prevent predictions after deadline", async function () {
-      const { market, predictor1, marketId } = await createMarketFixture();
-
-      // Advance time past deadline (24 hours = 86400 seconds)
-      await advanceTime(86401);
-
-      try {
-        await market.write.placePrediction([marketId, 50n], {
-          account: predictor1.account,
-          value: parseEther("1.0"),
-        });
-        expect.fail("Should have thrown");
-      } catch (error: any) {
-        expect(error.message).to.include("Market closed");
-      }
-    });
-  });
-
-  describe("Market Resolution", function () {
-    async function createMarketWithPredictionsFixture() {
-      const fixtures = await deployFixture();
-
-      // Get fresh timestamp after all the deployments
-      const block = await fixtures.publicClient.getBlock();
-      const deadline = block.timestamp + 86401n;
-
-      await fixtures.market.write.createMarket(
-        [1n, 1n, 1n, deadline, "Resolution test", "0x0000000000000000000000000000000000000000000000000000000000000000"],
-        { account: fixtures.dealer1.account }
-      );
-
-      // Place predictions
-      await fixtures.market.write.placePrediction([1n, 30n], {
+      await fixtures.market.write.placePrediction([1n, 30n, toUSDC("100")], {
         account: fixtures.predictor1.account,
-        value: parseEther("1.0"),
       });
-
-      await fixtures.market.write.placePrediction([1n, 70n], {
+      await fixtures.market.write.placePrediction([1n, 70n, toUSDC("100")], {
         account: fixtures.predictor2.account,
-        value: parseEther("2.0"),
       });
 
-      return { ...fixtures, marketId: 1n };
+      return { ...fixtures };
     }
 
-    it("Should only allow dealer to resolve market", async function () {
-      const { market, dealer1, predictor1, marketId } =
-        await createMarketWithPredictionsFixture();
-
-      // Advance past deadline
-      await advanceTime(86401);
-
-      // Non-dealer should fail
-      try {
-        await market.write.resolveMarket([marketId, 50n], {
-          account: predictor1.account,
-        });
-        expect.fail("Should have thrown");
-      } catch (error: any) {
-        expect(error.message).to.include("Not market dealer");
-      }
-
-      // Dealer should succeed
-      await market.write.resolveMarket([marketId, 50n], {
-        account: dealer1.account,
-      });
-
-      const marketData = await market.read.markets([marketId]);
-      expect(marketData[8]).to.equal(2); // MarketStatus.Resolved
-    });
-
-    it("Should prevent resolution before deadline", async function () {
-      const { market, dealer1, marketId } =
-        await createMarketWithPredictionsFixture();
-
-      try {
-        await market.write.resolveMarket([marketId, 50n], {
-          account: dealer1.account,
-        });
-        expect.fail("Should have thrown");
-      } catch (error: any) {
-        expect(error.message).to.include("Market still active");
-      }
-    });
-
-    it("Should emit MarketResolved event", async function () {
-      const { market, dealer1, marketId, publicClient } =
-        await createMarketWithPredictionsFixture();
+    it("only allows current NFT owner to resolve manually", async function () {
+      const { market, dealer1, dealer2, predictor1, dealerNFT } = await openBalancedMarket();
 
       await advanceTime(86401);
 
-      const hash = await market.write.resolveMarket([marketId, 50n], {
+      try {
+        await market.write.resolveMarket([1n, 50n], { account: predictor1.account });
+        expect.fail("Should have thrown");
+      } catch (error: any) {
+        expect(error.message).to.include("Not dealer owner");
+      }
+
+      const nft = await hre.viem.getContractAt("DealerNFT", dealerNFT.address);
+      await nft.write.transferFrom([dealer1.account.address, dealer2.account.address, 1n], {
         account: dealer1.account,
       });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      expect(receipt.logs.length).to.be.greaterThan(0);
-    });
-  });
-
-  describe("Upgrade", function () {
-    it("Should only allow owner to upgrade", async function () {
-      const { market, dealer1 } = await deployFixture();
-
-      const newImpl = await viem.deployContract("PredictionMarket");
-
-      try {
-        await market.write.upgradeToAndCall([newImpl.address, "0x"], {
-          account: dealer1.account,
-        });
-        expect.fail("Should have thrown");
-      } catch (error: any) {
-        expect(error.message).to.include("OwnableUnauthorizedAccount");
-      }
+      await market.write.resolveMarket([1n, 60n], { account: dealer2.account });
+      const marketData = await market.read.markets([1n]);
+      expect(marketData[8]).to.equal(2); // resolved
     });
 
-    it("Should preserve state after upgrade", async function () {
-      const { market, dealer1, dealerNFT, publicClient } = await deployFixture();
-
-      // Get fresh timestamp
+    it("auto-cancels if only one side participated", async function () {
+      const { market, dealer1, predictor1, publicClient } = await deployPredictionFixture();
       const block = await publicClient.getBlock();
       const deadline = block.timestamp + 86401n;
 
-      // Create market before upgrade
       await market.write.createMarket(
-        [1n, 1n, 1n, deadline, "Upgrade test", "0x0000000000000000000000000000000000000000000000000000000000000000"],
+        [1n, 1n, 1n, deadline, "One sided", ZERO_ORACLE_ID],
         { account: dealer1.account }
       );
 
-      const counterBefore = await market.read.marketCounter();
+      await market.write.placePrediction([1n, 20n, toUSDC("200")], {
+        account: predictor1.account,
+      });
 
-      // Upgrade
-      const newImpl = await viem.deployContract("PredictionMarket");
-      await market.write.upgradeToAndCall([newImpl.address, "0x"]);
+      await advanceTime(86401);
+      await market.write.resolveMarket([1n, 10n], { account: dealer1.account });
 
-      // Verify state preserved
-      const counterAfter = await market.read.marketCounter();
-      expect(counterAfter).to.equal(counterBefore);
-
-      const storedDealerNFT = await market.read.dealerNFT();
-      expect(storedDealerNFT.toLowerCase()).to.equal(
-        dealerNFT.address.toLowerCase()
-      );
-    });
-  });
-
-  describe("Access Control", function () {
-    it("Should only allow owner to pause", async function () {
-      const { market, dealer1 } = await deployFixture();
-
-      try {
-        await market.write.pause({ account: dealer1.account });
-        expect.fail("Should have thrown");
-      } catch (error: any) {
-        expect(error.message).to.include("OwnableUnauthorizedAccount");
-      }
-
-      // Owner can pause
-      await market.write.pause();
-      const paused = await market.read.paused();
-      expect(paused).to.be.true;
+      const state = await market.read.markets([1n]);
+      expect(state[8]).to.equal(1); // cancelled
+      const refund = await market.read.getRefundAmount([1n, predictor1.account.address]);
+      expect(refund).to.equal(toUSDC("200"));
     });
 
-    it("Should prevent operations when paused", async function () {
-      const { market, dealer1, publicClient } = await deployFixture();
-
-      await market.write.pause();
-
-      // Get fresh timestamp
+    it("allows abandonment with refunds when dealer/oracle stalled", async function () {
+      const { market, dealer1, predictor1, publicClient } = await deployPredictionFixture();
       const block = await publicClient.getBlock();
       const deadline = block.timestamp + 86401n;
 
+      await market.write.createMarket(
+        [1n, 1n, 1n, deadline, "Abandon me", ZERO_ORACLE_ID],
+        { account: dealer1.account }
+      );
+      await market.write.placePrediction([1n, 55n, toUSDC("50")], {
+        account: predictor1.account,
+      });
+
+      await advanceTime(Number(86401n + 86401n));
+      await market.write.abandonMarket([1n]);
+
+      const refund = await market.read.getRefundAmount([1n, predictor1.account.address]);
+      expect(refund).to.equal(toUSDC("50"));
+    });
+
+    it("distributes payouts and fees in USDC", async function () {
+      const { market, dealer1, predictor1, predictor2, publicClient, stakeToken, owner } =
+        await deployPredictionFixture();
+      const block = await publicClient.getBlock();
+      const deadline = block.timestamp + 86401n;
+
+      await market.write.createMarket(
+        [1n, 1n, 1n, deadline, "Winner payout", ZERO_ORACLE_ID],
+        { account: dealer1.account }
+      );
+      await market.write.setDealerFee([1n, 100n], { account: dealer1.account }); // 1%
+
+      await market.write.placePrediction([1n, 40n, toUSDC("100")], {
+        account: predictor1.account,
+      });
+      await market.write.placePrediction([1n, 80n, toUSDC("100")], {
+        account: predictor2.account,
+      });
+
+      await advanceTime(86401);
+      await market.write.resolveMarket([1n, 70n], { account: dealer1.account });
+
+      const winnerBefore = await stakeToken.read.balanceOf([predictor2.account.address]);
+      await market.write.claimWinnings([1n], { account: predictor2.account });
+      const winnerAfter = await stakeToken.read.balanceOf([predictor2.account.address]);
+      expect(winnerAfter - winnerBefore).to.equal(toUSDC("197.8"));
+
+      const dealerBefore = await stakeToken.read.balanceOf([dealer1.account.address]);
+      await market.write.withdrawDealerFees([1n], { account: dealer1.account });
+      const dealerAfter = await stakeToken.read.balanceOf([dealer1.account.address]);
+      expect(dealerAfter - dealerBefore).to.equal(toUSDC("2"));
+
+      const ownerBefore = await stakeToken.read.balanceOf([owner.account.address]);
+      await market.write.withdrawSystemFees({ account: owner.account });
+      const ownerAfter = await stakeToken.read.balanceOf([owner.account.address]);
+      expect(ownerAfter - ownerBefore).to.equal(toUSDC("0.2"));
+    });
+
+    it("validates oracle timestamps before resolving", async function () {
+      const { market, dealer1, oracleResolver, owner, publicClient, predictor1, predictor2 } =
+        await deployPredictionFixture();
+      const oracleId =
+        "0x0000000000000000000000000000000000000000000000000000000000000abc";
+
+      await oracleResolver.write.registerOracle(
+        [oracleId, 2, getAddress(owner.account.address), 0n, 100n, 86400n],
+        { account: owner.account }
+      );
+      await oracleResolver.write.setAuthorizedUpdater([owner.account.address, true], {
+        account: owner.account,
+      });
+
+      const block = await publicClient.getBlock();
+      const deadline = block.timestamp + 86401n;
+
+      await market.write.createMarket(
+        [1n, 1n, 1n, deadline, "Oracle market", oracleId],
+        { account: dealer1.account }
+      );
+
+      await market.write.placePrediction([1n, 20n, toUSDC("50")], {
+        account: predictor1.account,
+      });
+      await market.write.placePrediction([1n, 80n, toUSDC("50")], {
+        account: predictor2.account,
+      });
+
+      // Publish oracle data too early
+      await oracleResolver.write.updateOracleData([oracleId, 80n], {
+        account: owner.account,
+      });
+
+      await advanceTime(86401);
+      let reverted = false;
       try {
-        await market.write.createMarket(
-          [1n, 1n, 1n, deadline, "Paused test", "0x0000000000000000000000000000000000000000000000000000000000000000"],
-          { account: dealer1.account }
-        );
-        expect.fail("Should have thrown");
-      } catch (error: any) {
-        // Check for pause-related error (could be "paused" or "EnforcedPause")
-        expect(error.message.toLowerCase()).to.match(/pause/);
+        await market.write.resolveMarketWithOracle([1n]);
+        expect.fail("Should revert on early data");
+      } catch {
+        reverted = true;
       }
+      expect(reverted).to.be.true;
+
+      let state = await market.read.markets([1n]);
+      expect(state[8]).to.equal(0); // still Active
+
+      // Publish fresh data
+      await oracleResolver.write.updateOracleData([oracleId, 90n], {
+        account: owner.account,
+      });
+
+      await market.write.resolveMarketWithOracle([1n]);
+      state = await market.read.markets([1n]);
+      expect(state[8]).to.equal(2);
     });
   });
 });

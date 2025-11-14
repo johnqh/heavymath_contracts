@@ -10,6 +10,8 @@ Multi-chain prediction market system with percentage-based odds and equilibrium 
 - **UUPS Upgradeable**: Contracts can be upgraded post-deployment for bug fixes and improvements
 - **Oracle Integration**: Chainlink (EVM) and Switchboard (Solana) for result resolution
 - **Dealer NFT System**: NFT-based permissions for creating prediction markets
+- **USDC Settlement**: EVM markets accept ERC20 deposits (USDC by default) with SafeERC20 handling and pre-deadline withdrawals
+- **Safety Valves**: Dealers (or the contract owner) can cancel empty markets, anyone can abandon unresolved markets after a grace period, and the system auto-refunds if equilibrium has no opposing side
 
 ## Architecture
 
@@ -18,6 +20,9 @@ Multi-chain prediction market system with percentage-based odds and equilibrium 
 **EVM (Ethereum, Polygon, Arbitrum, Base)**:
 - `DealerNFT`: UUPS upgradeable NFT granting market creation permissions
 - `PredictionMarket`: UUPS upgradeable contract managing all prediction markets
+  - Requires a configured ERC20 stake token (USDC) during initialization
+  - Supports `withdrawPrediction`, `cancelMarket`, and `abandonMarket` flows for safer user refunds
+  - Dealer and system fees are accrued and withdrawn in the stake token
 
 **Solana** (Coming soon):
 - Anchor programs for NFT and prediction market functionality
@@ -49,24 +54,30 @@ const walletClient = createWalletClient({
   transport: http()
 });
 
-const client = new PredictionClient();
+const client = new PredictionClient({
+  predictionMarket: "0xPredictionMarketProxy",
+  stakeToken: "0xUSDCAddress"
+});
 
-// Create a prediction market
-await client.createMarket(
-  { walletClient },
-  chainInfo,
+// Create a prediction market through the EVM client
+await client.evm.createMarket(
+  { walletClient, publicClient },
   {
-    nftId: "1",
-    category: 1,
-    subCategory: 2,
-    scopeId: "World Cup 2026",
-    eventId: "Game 1: USA vs MEX",
-    outcome: "USA wins",
-    predictionDeadline: Date.now() + 86400000, // 1 day
-    eventTime: Date.now() + 172800000, // 2 days
-    oracleDeadline: Date.now() + 259200000, // 3 days
-    dealerFeePercent: 50 // 0.5%
+    tokenId: 1n,
+    category: 1n,
+    subCategory: 2n,
+    deadline: BigInt(Math.floor(Date.now() / 1000) + 86_400),
+    description: "Team A wins",
+    oracleId: "0x0000000000000000000000000000000000000000000000000000000000000000"
   }
+);
+
+// Place a prediction (handles USDC approval automatically)
+await client.evm.placePrediction(
+  { walletClient, publicClient },
+  1n,
+  60,
+  1_000_000n // 1 USDC (6 decimals)
 );
 ```
 
@@ -111,6 +122,12 @@ npm test
 npm run test:evm      # EVM contract tests
 npm run test:solana   # Solana program tests
 npm run test:unified  # Unified client tests
+
+# Run PredictionClient example (requires env vars)
+PRIVATE_KEY=0x... \
+PREDICTION_MARKET=0x... \
+USDC_ADDRESS=0x... \
+node --loader ts-node/esm examples/evm/prediction-client.ts
 ```
 
 ### Deployment
@@ -128,6 +145,17 @@ npm run verify:evm:sepolia
 npm run prepare-upgrade:evm  # Validate upgrade first
 npm run upgrade:evm:sepolia
 ```
+
+##### Stake Token & Governance Checklist
+
+| Network        | USDC Token Address                                   | Notes                              |
+| -------------- | ---------------------------------------------------- | ---------------------------------- |
+| Ethereum Mainnet | `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48`        | Set contract owner to multisig     |
+| Base Mainnet     | `0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA`        | Confirm Circle native USDC         |
+| Arbitrum One     | `0xaf88d065e77c8cC2239327C5EDb3A432268e5831`        |                                     |
+| Sepolia (test)   | Deploy MockUSDC or use native test USDC address     | Configure `USDC_ADDRESS` env var   |
+
+Deployment scripts must be provided with `USDC_ADDRESS` and `OWNER_MULTISIG` environment variables so the PredictionMarket initializer receives the correct stake token and ownership is transferred to a multi-sig immediately after deployment.
 
 #### Solana
 
@@ -184,6 +212,13 @@ payout = stake + (stake / total_winner_side) * total_loser_side - fees
 Fees:
 - Dealer fee: 0.1% - 2% (dealer sets within bounds)
 - System fee: 10% of dealer fee
+
+### Lifecycle Safety
+
+- **ERC20 Escrows**: EVM markets require an ERC20 stake token (USDC by default). All deposits, claims, and fee withdrawals use SafeERC20 transfers to avoid ETH mismatches.
+- **Withdraw Prediction**: Users can call `withdrawPrediction(marketId)` any time before the deadline to reclaim their entire stake.
+- **Cancellation & Abandonment**: Dealers (or the owner) can `cancelMarket` when no wagers exist, and anyone can call `abandonMarket` after the resolution grace period to trigger full refunds if an oracle or dealer disappears.
+- **Oracle Timestamp Guardrails**: `resolveMarketWithOracle` verifies that oracle data was produced after the prediction deadline, so stale feeds can’t settle markets prematurely.
 
 ## Security
 

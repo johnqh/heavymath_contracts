@@ -6,6 +6,8 @@ import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./DealerNFT.sol";
 import "./OracleResolver.sol";
 
@@ -33,14 +35,15 @@ contract PredictionMarket is
     UUPSUpgradeable,
     ReentrancyGuardUpgradeable
 {
+    using SafeERC20 for IERC20;
     /// @notice Minimum market duration (24 hours)
     uint256 public constant MIN_DURATION = 24 hours;
 
     /// @notice Grace period for updating predictions (5 minutes)
     uint256 public constant GRACE_PERIOD = 5 minutes;
 
-    /// @notice Minimum bet amount (0.001 ETH)
-    uint256 public constant MIN_BET = 0.001 ether;
+    /// @notice Additional time after deadline before a market can be abandoned
+    uint256 public constant RESOLUTION_GRACE_PERIOD = 24 hours;
 
     /// @notice Dealer fee bounds (in basis points: 1 bp = 0.01%)
     uint256 public constant MIN_DEALER_FEE_BPS = 10; // 0.1%
@@ -86,6 +89,9 @@ contract PredictionMarket is
 
     /// @notice OracleResolver contract reference
     OracleResolver public oracleResolver;
+
+    /// @notice ERC20 stake token (e.g., USDC)
+    IERC20 public stakeToken;
 
     /// @notice Market counter
     uint256 public marketCounter;
@@ -142,6 +148,7 @@ contract PredictionMarket is
         uint256 equilibrium
     );
 
+    event MarketCancelled(uint256 indexed marketId);
     event MarketAbandoned(uint256 indexed marketId);
 
     event DealerFeeSet(uint256 indexed marketId, uint256 feeBps);
@@ -175,15 +182,21 @@ contract PredictionMarket is
      * @notice Initialize the contract
      * @param _dealerNFT Address of the DealerNFT contract
      * @param _oracleResolver Address of the OracleResolver contract
+     * @param _stakeToken Address of the ERC20 stake token (USDC)
      */
-    function initialize(address _dealerNFT, address _oracleResolver) public initializer {
+    function initialize(address _dealerNFT, address _oracleResolver, address _stakeToken) public initializer {
         __Ownable_init(msg.sender);
         __Pausable_init();
         __UUPSUpgradeable_init();
         __ReentrancyGuard_init();
 
+        require(_dealerNFT != address(0), "Dealer NFT required");
+        require(_oracleResolver != address(0), "Oracle required");
+        require(_stakeToken != address(0), "Stake token required");
+
         dealerNFT = DealerNFT(_dealerNFT);
         oracleResolver = OracleResolver(_oracleResolver);
+        stakeToken = IERC20(_stakeToken);
         marketCounter = 0;
     }
 
@@ -261,7 +274,7 @@ contract PredictionMarket is
      */
     function setDealerFee(uint256 marketId, uint256 feeBps) external {
         Market storage market = markets[marketId];
-        require(market.dealer == msg.sender, "Not market dealer");
+        require(dealerNFT.ownerOf(market.tokenId) == msg.sender, "Not dealer owner");
         require(market.status == MarketStatus.Active, "Market not active");
         require(
             feeBps >= MIN_DEALER_FEE_BPS && feeBps <= MAX_DEALER_FEE_BPS,
@@ -277,9 +290,8 @@ contract PredictionMarket is
      * @param marketId Market ID
      * @param percentage Predicted percentage (0-100)
      */
-    function placePrediction(uint256 marketId, uint256 percentage)
+    function placePrediction(uint256 marketId, uint256 percentage, uint256 amount)
         external
-        payable
         whenNotPaused
         nonReentrant
     {
@@ -287,22 +299,25 @@ contract PredictionMarket is
         require(market.status == MarketStatus.Active, "Market not active");
         require(block.timestamp < market.deadline, "Market closed");
         require(percentage <= 100, "Invalid percentage");
-        require(msg.value >= MIN_BET, "Below minimum");
+        require(amount > 0, "Amount zero");
 
         Prediction storage prediction = predictions[marketId][msg.sender];
         require(prediction.amount == 0, "Already predicted");
 
+        // Transfer stake tokens from predictor
+        stakeToken.safeTransferFrom(msg.sender, address(this), amount);
+
         // Store prediction
-        prediction.amount = msg.value;
+        prediction.amount = amount;
         prediction.percentage = percentage;
         prediction.placedAt = block.timestamp;
         prediction.claimed = false;
 
         // Update percentage totals and market pool
-        percentageTotals[marketId][percentage] += msg.value;
-        marketPools[marketId] += msg.value;
+        percentageTotals[marketId][percentage] += amount;
+        marketPools[marketId] += amount;
 
-        emit PredictionPlaced(marketId, msg.sender, msg.value, percentage);
+        emit PredictionPlaced(marketId, msg.sender, amount, percentage);
     }
 
     /**
@@ -315,7 +330,7 @@ contract PredictionMarket is
         uint256 marketId,
         uint256 newPercentage,
         uint256 additionalAmount
-    ) external payable whenNotPaused nonReentrant {
+    ) external whenNotPaused nonReentrant {
         Market storage market = markets[marketId];
         require(market.status == MarketStatus.Active, "Market not active");
         require(block.timestamp < market.deadline, "Market closed");
@@ -327,22 +342,47 @@ contract PredictionMarket is
             "Grace period expired"
         );
         require(newPercentage <= 100, "Invalid percentage");
-        require(msg.value == additionalAmount, "Amount mismatch");
+
+        uint256 previousAmount = prediction.amount;
 
         // Remove old percentage total
-        percentageTotals[marketId][prediction.percentage] -= prediction.amount;
+        percentageTotals[marketId][prediction.percentage] -= previousAmount;
 
-        // Update prediction
-        prediction.amount += additionalAmount;
+        if (additionalAmount > 0) {
+            stakeToken.safeTransferFrom(msg.sender, address(this), additionalAmount);
+            prediction.amount += additionalAmount;
+            marketPools[marketId] += additionalAmount;
+        }
+
         prediction.percentage = newPercentage;
 
-        // Add new percentage total and update market pool
+        // Add new percentage total
         percentageTotals[marketId][newPercentage] += prediction.amount;
-        marketPools[marketId] += additionalAmount;
 
         emit PredictionUpdated(marketId, msg.sender, prediction.amount, newPercentage);
     }
 
+    /**
+     * @notice Withdraw an existing prediction before the market deadline
+     * @param marketId Market ID
+     */
+    function withdrawPrediction(uint256 marketId) external nonReentrant {
+        Market storage market = markets[marketId];
+        require(market.status == MarketStatus.Active, "Market not active");
+        require(block.timestamp < market.deadline, "Market closed");
+
+        Prediction storage prediction = predictions[marketId][msg.sender];
+        uint256 amount = prediction.amount;
+        require(amount > 0, "No prediction");
+
+        // Update accounting
+        percentageTotals[marketId][prediction.percentage] -= amount;
+        marketPools[marketId] -= amount;
+
+        delete predictions[marketId][msg.sender];
+
+        stakeToken.safeTransfer(msg.sender, amount);
+    }
     /**
      * @notice Resolve a market with the final result
      * @param marketId Market ID
@@ -350,19 +390,13 @@ contract PredictionMarket is
      */
     function resolveMarket(uint256 marketId, uint256 resolution) external {
         Market storage market = markets[marketId];
-        require(market.dealer == msg.sender, "Not market dealer");
+        require(dealerNFT.ownerOf(market.tokenId) == msg.sender, "Not dealer owner");
         require(market.status == MarketStatus.Active, "Market not active");
         require(block.timestamp >= market.deadline, "Market still active");
+        require(market.oracleId == bytes32(0), "Oracle controlled market");
         require(resolution <= 100, "Invalid resolution");
 
-        // Calculate equilibrium
-        uint256 equilibrium = calculateEquilibrium(marketId);
-
-        market.status = MarketStatus.Resolved;
-        market.resolution = resolution;
-        market.equilibrium = equilibrium;
-
-        emit MarketResolved(marketId, resolution, equilibrium);
+        _finalizeResolution(marketId, resolution);
     }
 
     /**
@@ -382,18 +416,46 @@ contract PredictionMarket is
 
         require(isValid, "Oracle data stale");
         require(percentage <= 100, "Invalid oracle percentage");
+        require(timestamp != 0 && timestamp >= market.deadline, "Oracle data too early");
 
-        // Calculate equilibrium
-        uint256 equilibrium = calculateEquilibrium(marketId);
+        _finalizeResolution(marketId, percentage);
 
-        market.status = MarketStatus.Resolved;
-        market.resolution = percentage;
-        market.equilibrium = equilibrium;
-
-        // Mark oracle data as used
+        // Mark oracle data as used (even if market became cancelled)
         oracleResolver.markResolved(market.oracleId);
+    }
 
-        emit MarketResolved(marketId, percentage, equilibrium);
+    /**
+     * @notice Cancel a market before any predictions are placed
+     * @param marketId Market ID
+     */
+    function cancelMarket(uint256 marketId) external {
+        Market storage market = markets[marketId];
+        require(market.status == MarketStatus.Active, "Market not active");
+        address dealerOwner = dealerNFT.ownerOf(market.tokenId);
+        require(
+            msg.sender == dealerOwner || msg.sender == owner(),
+            "Not authorized"
+        );
+        require(marketPools[marketId] == 0, "Predictions exist");
+
+        market.status = MarketStatus.Cancelled;
+        emit MarketCancelled(marketId);
+    }
+
+    /**
+     * @notice Mark market as abandoned when dealer/oracle fails to resolve
+     * @param marketId Market ID
+     */
+    function abandonMarket(uint256 marketId) external {
+        Market storage market = markets[marketId];
+        require(market.status == MarketStatus.Active, "Market not active");
+        require(
+            block.timestamp >= market.deadline + RESOLUTION_GRACE_PERIOD,
+            "Resolution grace period active"
+        );
+
+        market.status = MarketStatus.Abandoned;
+        emit MarketAbandoned(marketId);
     }
 
     /**
@@ -486,6 +548,60 @@ contract PredictionMarket is
     }
 
     /**
+     * @notice Determine if both sides of the market have liquidity
+     * @param marketId Market ID
+     * @param equilibrium Equilibrium percentage
+     * @return True if there are stakes on both sides of equilibrium
+     */
+    function _hasTwoSidedMarket(uint256 marketId, uint256 equilibrium) internal view returns (bool) {
+        bool hasBelow = false;
+        bool hasAbove = false;
+
+        if (equilibrium > 0) {
+            for (uint256 i = 0; i < equilibrium; i++) {
+                if (percentageTotals[marketId][i] > 0) {
+                    hasBelow = true;
+                    break;
+                }
+            }
+        }
+
+        if (equilibrium < 100) {
+            for (uint256 j = equilibrium + 1; j <= 100; j++) {
+                if (percentageTotals[marketId][j] > 0) {
+                    hasAbove = true;
+                    break;
+                }
+            }
+        }
+
+        return hasBelow && hasAbove;
+    }
+
+    /**
+     * @notice Internal helper to finalize market resolution or trigger refunds
+     * @param marketId Market ID
+     * @param resolution Final percentage result
+     */
+    function _finalizeResolution(uint256 marketId, uint256 resolution) internal {
+        Market storage market = markets[marketId];
+
+        uint256 equilibrium = calculateEquilibrium(marketId);
+        market.equilibrium = equilibrium;
+
+        if (!_hasTwoSidedMarket(marketId, equilibrium)) {
+            market.status = MarketStatus.Cancelled;
+            emit MarketCancelled(marketId);
+            return;
+        }
+
+        market.status = MarketStatus.Resolved;
+        market.resolution = resolution;
+
+        emit MarketResolved(marketId, resolution, equilibrium);
+    }
+
+    /**
      * @notice Check if a predictor is a winner
      * @param marketId Market ID
      * @param predictor Predictor address
@@ -494,7 +610,12 @@ contract PredictionMarket is
      */
     function isWinner(uint256 marketId, address predictor) public view returns (bool) {
         Market storage market = markets[marketId];
-        require(market.status == MarketStatus.Resolved, "Market not resolved");
+        require(
+            market.status == MarketStatus.Resolved ||
+                market.status == MarketStatus.Cancelled ||
+                market.status == MarketStatus.Abandoned,
+            "Market not finalized"
+        );
 
         Prediction storage prediction = predictions[marketId][predictor];
         require(prediction.amount > 0, "No prediction");
@@ -522,19 +643,26 @@ contract PredictionMarket is
     }
 
     /**
-     * @notice Get refund amount for a predictor (if at equilibrium)
+     * @notice Get refund amount for a predictor (equilibrium/cancelled/abandoned)
      * @param marketId Market ID
      * @param predictor Predictor address
      * @return Refund amount
      */
     function getRefundAmount(uint256 marketId, address predictor) public view returns (uint256) {
         Market storage market = markets[marketId];
-        if (market.status != MarketStatus.Resolved) {
+        Prediction storage prediction = predictions[marketId][predictor];
+        if (prediction.amount == 0) {
             return 0;
         }
 
-        Prediction storage prediction = predictions[marketId][predictor];
-        if (prediction.amount == 0) {
+        if (
+            market.status == MarketStatus.Cancelled ||
+            market.status == MarketStatus.Abandoned
+        ) {
+            return prediction.amount;
+        }
+
+        if (market.status != MarketStatus.Resolved) {
             return 0;
         }
 
@@ -605,11 +733,13 @@ contract PredictionMarket is
 
         // Calculate fees
         uint256 totalPool = marketPools[marketId];
-        uint256 dealerFee = (totalPool * market.dealerFeeBps) / 10000;
+        uint256 equilibriumAmount = percentageTotals[marketId][market.equilibrium];
+        uint256 distributablePool = totalPool > equilibriumAmount ? totalPool - equilibriumAmount : 0;
+        uint256 dealerFee = (distributablePool * market.dealerFeeBps) / 10000;
         uint256 systemFee = (dealerFee * SYSTEM_FEE_PERCENT) / 100;
 
-        // Winner pool = total pool - fees
-        uint256 winnerPool = totalPool - dealerFee - systemFee;
+        // Winner pool = total pool - refundable stakes - fees
+        uint256 winnerPool = distributablePool - dealerFee - systemFee;
 
         // Get total winning bets
         uint256 totalWinningBets = _calculateTotalWinningBets(marketId);
@@ -628,7 +758,12 @@ contract PredictionMarket is
      */
     function claimWinnings(uint256 marketId) external nonReentrant {
         Market storage market = markets[marketId];
-        require(market.status == MarketStatus.Resolved, "Market not resolved");
+        require(
+            market.status == MarketStatus.Resolved ||
+                market.status == MarketStatus.Cancelled ||
+                market.status == MarketStatus.Abandoned,
+            "Market not finalized"
+        );
 
         Prediction storage prediction = predictions[marketId][msg.sender];
         require(prediction.amount > 0, "No prediction");
@@ -642,19 +777,23 @@ contract PredictionMarket is
         prediction.claimed = true;
 
         // Transfer payout
-        (bool success, ) = msg.sender.call{value: payout}("");
-        require(success, "Transfer failed");
+        stakeToken.safeTransfer(msg.sender, payout);
 
         emit WinningsClaimed(marketId, msg.sender, payout);
     }
 
     /**
-     * @notice Claim refund for prediction at equilibrium
+     * @notice Claim refund for eligible predictions (equilibrium or cancellation flows)
      * @param marketId Market ID
      */
     function claimRefund(uint256 marketId) external nonReentrant {
         Market storage market = markets[marketId];
-        require(market.status == MarketStatus.Resolved, "Market not resolved");
+        require(
+            market.status == MarketStatus.Resolved ||
+                market.status == MarketStatus.Cancelled ||
+                market.status == MarketStatus.Abandoned,
+            "Market not finalized"
+        );
 
         Prediction storage prediction = predictions[marketId][msg.sender];
         require(prediction.amount > 0, "No prediction");
@@ -667,8 +806,7 @@ contract PredictionMarket is
         prediction.claimed = true;
 
         // Transfer refund
-        (bool success, ) = msg.sender.call{value: refundAmount}("");
-        require(success, "Transfer failed");
+        stakeToken.safeTransfer(msg.sender, refundAmount);
 
         emit RefundClaimed(marketId, msg.sender, refundAmount);
     }
@@ -680,14 +818,16 @@ contract PredictionMarket is
     function withdrawDealerFees(uint256 marketId) external nonReentrant {
         Market storage market = markets[marketId];
         require(market.status == MarketStatus.Resolved, "Market not resolved");
-        require(market.dealer == msg.sender, "Not market dealer");
+        require(dealerNFT.ownerOf(market.tokenId) == msg.sender, "Not dealer owner");
 
         uint256 feeAmount = dealerFees[marketId];
         if (feeAmount == 0) {
             // Calculate and store dealer fee
             uint256 totalPool = marketPools[marketId];
             uint256 dealerFeeBps = market.dealerFeeBps;
-            feeAmount = (totalPool * dealerFeeBps) / 10000;
+            uint256 equilibriumAmount = percentageTotals[marketId][market.equilibrium];
+            uint256 distributablePool = totalPool > equilibriumAmount ? totalPool - equilibriumAmount : 0;
+            feeAmount = (distributablePool * dealerFeeBps) / 10000;
 
             dealerFees[marketId] = feeAmount;
 
@@ -703,8 +843,7 @@ contract PredictionMarket is
         dealerFees[marketId] = 0;
 
         // Transfer fees
-        (bool success, ) = msg.sender.call{value: feeAmount}("");
-        require(success, "Transfer failed");
+        stakeToken.safeTransfer(msg.sender, feeAmount);
 
         emit DealerFeesWithdrawn(marketId, msg.sender, feeAmount);
     }
@@ -718,8 +857,7 @@ contract PredictionMarket is
 
         totalSystemFees = 0;
 
-        (bool success, ) = msg.sender.call{value: amount}("");
-        require(success, "Transfer failed");
+        stakeToken.safeTransfer(msg.sender, amount);
 
         emit SystemFeesWithdrawn(msg.sender, amount);
     }
