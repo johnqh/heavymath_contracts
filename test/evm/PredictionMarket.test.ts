@@ -41,12 +41,28 @@ describe("PredictionMarket", function () {
     // Set permissions for dealer2: category 1, specific subcategories
     await dealerNFT.write.setPermissions([2n, 1n, [1n, 2n]]);
 
+    // Deploy OracleResolver
+    const oracleImpl = await viem.deployContract("OracleResolver");
+    const oracleInitData = encodeFunctionData({
+      abi: parseAbi(["function initialize()"]),
+      functionName: "initialize",
+      args: [],
+    });
+    const oracleProxy = await viem.deployContract("ERC1967Proxy", [
+      oracleImpl.address,
+      oracleInitData,
+    ]);
+    const oracleResolver = await viem.getContractAt(
+      "OracleResolver",
+      oracleProxy.address
+    );
+
     // Deploy PredictionMarket
     const marketImpl = await viem.deployContract("PredictionMarket");
     const marketInitData = encodeFunctionData({
-      abi: parseAbi(["function initialize(address)"]),
+      abi: parseAbi(["function initialize(address,address)"]),
       functionName: "initialize",
-      args: [dealerNFT.address],
+      args: [dealerNFT.address, oracleResolver.address],
     });
     const marketProxy = await viem.deployContract("ERC1967Proxy", [
       marketImpl.address,
@@ -66,6 +82,7 @@ describe("PredictionMarket", function () {
       marketImpl,
       marketProxy,
       dealerNFT,
+      oracleResolver,
       owner,
       dealer1,
       dealer2,
@@ -87,9 +104,9 @@ describe("PredictionMarket", function () {
     });
 
     it("Should prevent re-initialization", async function () {
-      const { market, dealerNFT } = await deployFixture();
+      const { market, dealerNFT, oracleResolver } = await deployFixture();
       try {
-        await market.write.initialize([dealerNFT.address]);
+        await market.write.initialize([dealerNFT.address, oracleResolver.address]);
         expect.fail("Should have thrown");
       } catch (error: any) {
         expect(error.message).to.include("InvalidInitialization");
@@ -124,6 +141,7 @@ describe("PredictionMarket", function () {
           1n, // subCategory
           deadline,
           "Will it rain tomorrow?",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
         ],
         { account: dealer1.account }
       );
@@ -139,7 +157,7 @@ describe("PredictionMarket", function () {
 
       try {
         await market.write.createMarket(
-          [1n, 1n, 1n, tooSoonDeadline, "Will it rain?"],
+          [1n, 1n, 1n, tooSoonDeadline, "Will it rain?", "0x0000000000000000000000000000000000000000000000000000000000000000"],
           { account: dealer1.account }
         );
         expect.fail("Should have thrown");
@@ -155,14 +173,14 @@ describe("PredictionMarket", function () {
 
       // dealer2 has permissions for category 1, subcategories [1, 2] only
       await market.write.createMarket(
-        [2n, 1n, 1n, deadline, "Valid market"],
+        [2n, 1n, 1n, deadline, "Valid market", "0x0000000000000000000000000000000000000000000000000000000000000000"],
         { account: dealer2.account }
       );
 
       // Should fail for subcategory 3
       try {
         await market.write.createMarket(
-          [2n, 1n, 3n, deadline, "Invalid subcategory"],
+          [2n, 1n, 3n, deadline, "Invalid subcategory", "0x0000000000000000000000000000000000000000000000000000000000000000"],
           { account: dealer2.account }
         );
         expect.fail("Should have thrown");
@@ -179,7 +197,7 @@ describe("PredictionMarket", function () {
       // dealer2 doesn't own tokenId 1
       try {
         await market.write.createMarket(
-          [1n, 1n, 1n, deadline, "Not my token"],
+          [1n, 1n, 1n, deadline, "Not my token", "0x0000000000000000000000000000000000000000000000000000000000000000"],
           { account: dealer2.account }
         );
         expect.fail("Should have thrown");
@@ -194,7 +212,7 @@ describe("PredictionMarket", function () {
       const deadline = block.timestamp + 86401n;
 
       const hash = await market.write.createMarket(
-        [1n, 1n, 1n, deadline, "Event test"],
+        [1n, 1n, 1n, deadline, "Event test", "0x0000000000000000000000000000000000000000000000000000000000000000"],
         { account: dealer1.account }
       );
 
@@ -209,7 +227,7 @@ describe("PredictionMarket", function () {
 
       // Create market
       await market.write.createMarket(
-        [1n, 1n, 1n, deadline, "Fee test"],
+        [1n, 1n, 1n, deadline, "Fee test", "0x0000000000000000000000000000000000000000000000000000000000000000"],
         { account: dealer1.account }
       );
 
@@ -226,7 +244,7 @@ describe("PredictionMarket", function () {
       const deadline = block.timestamp + 86401n;
 
       await market.write.createMarket(
-        [1n, 1n, 1n, deadline, "Fee bounds test"],
+        [1n, 1n, 1n, deadline, "Fee bounds test", "0x0000000000000000000000000000000000000000000000000000000000000000"],
         { account: dealer1.account }
       );
 
@@ -257,7 +275,7 @@ describe("PredictionMarket", function () {
       const deadline = block.timestamp + 86401n;
 
       await fixtures.market.write.createMarket(
-        [1n, 1n, 1n, deadline, "Test market"],
+        [1n, 1n, 1n, deadline, "Test market", "0x0000000000000000000000000000000000000000000000000000000000000000"],
         { account: fixtures.dealer1.account }
       );
 
@@ -395,7 +413,7 @@ describe("PredictionMarket", function () {
       const deadline = block.timestamp + 86401n;
 
       await fixtures.market.write.createMarket(
-        [1n, 1n, 1n, deadline, "Resolution test"],
+        [1n, 1n, 1n, deadline, "Resolution test", "0x0000000000000000000000000000000000000000000000000000000000000000"],
         { account: fixtures.dealer1.account }
       );
 
@@ -493,7 +511,7 @@ describe("PredictionMarket", function () {
 
       // Create market before upgrade
       await market.write.createMarket(
-        [1n, 1n, 1n, deadline, "Upgrade test"],
+        [1n, 1n, 1n, deadline, "Upgrade test", "0x0000000000000000000000000000000000000000000000000000000000000000"],
         { account: dealer1.account }
       );
 
@@ -542,7 +560,7 @@ describe("PredictionMarket", function () {
 
       try {
         await market.write.createMarket(
-          [1n, 1n, 1n, deadline, "Paused test"],
+          [1n, 1n, 1n, deadline, "Paused test", "0x0000000000000000000000000000000000000000000000000000000000000000"],
           { account: dealer1.account }
         );
         expect.fail("Should have thrown");

@@ -7,6 +7,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "./DealerNFT.sol";
+import "./OracleResolver.sol";
 
 /**
  * @title PredictionMarket
@@ -69,6 +70,7 @@ contract PredictionMarket is
         MarketStatus status; // Market status
         uint256 resolution; // Resolved percentage (0-100)
         uint256 equilibrium; // Calculated equilibrium point (0-100)
+        bytes32 oracleId; // Optional oracle ID for automated resolution
     }
 
     /// @notice Prediction struct
@@ -81,6 +83,9 @@ contract PredictionMarket is
 
     /// @notice DealerNFT contract reference
     DealerNFT public dealerNFT;
+
+    /// @notice OracleResolver contract reference
+    OracleResolver public oracleResolver;
 
     /// @notice Market counter
     uint256 public marketCounter;
@@ -143,14 +148,16 @@ contract PredictionMarket is
     /**
      * @notice Initialize the contract
      * @param _dealerNFT Address of the DealerNFT contract
+     * @param _oracleResolver Address of the OracleResolver contract
      */
-    function initialize(address _dealerNFT) public initializer {
+    function initialize(address _dealerNFT, address _oracleResolver) public initializer {
         __Ownable_init(msg.sender);
         __Pausable_init();
         __UUPSUpgradeable_init();
         __ReentrancyGuard_init();
 
         dealerNFT = DealerNFT(_dealerNFT);
+        oracleResolver = OracleResolver(_oracleResolver);
         marketCounter = 0;
     }
 
@@ -161,13 +168,15 @@ contract PredictionMarket is
      * @param subCategory Market subcategory
      * @param deadline Prediction deadline timestamp
      * @param description Market description
+     * @param oracleId Optional oracle ID for automated resolution (bytes32(0) for manual)
      */
     function createMarket(
         uint256 tokenId,
         uint256 category,
         uint256 subCategory,
         uint256 deadline,
-        string calldata description
+        string calldata description,
+        bytes32 oracleId
     ) external whenNotPaused returns (uint256) {
         // Validate caller owns the dealer NFT
         require(
@@ -202,7 +211,8 @@ contract PredictionMarket is
             dealerFeeBps: MIN_DEALER_FEE_BPS, // Default to minimum fee
             status: MarketStatus.Active,
             resolution: 0,
-            equilibrium: 0
+            equilibrium: 0,
+            oracleId: oracleId
         });
 
         emit MarketCreated(
@@ -325,6 +335,37 @@ contract PredictionMarket is
         market.equilibrium = equilibrium;
 
         emit MarketResolved(marketId, resolution, equilibrium);
+    }
+
+    /**
+     * @notice Resolve a market using oracle data
+     * @param marketId Market ID
+     * @dev Anyone can call this after deadline if market has oracle configured
+     */
+    function resolveMarketWithOracle(uint256 marketId) external {
+        Market storage market = markets[marketId];
+        require(market.status == MarketStatus.Active, "Market not active");
+        require(block.timestamp >= market.deadline, "Market still active");
+        require(market.oracleId != bytes32(0), "No oracle configured");
+
+        // Get oracle data
+        (uint256 percentage, uint256 timestamp, bool isValid) =
+            oracleResolver.getOracleData(market.oracleId);
+
+        require(isValid, "Oracle data stale");
+        require(percentage <= 100, "Invalid oracle percentage");
+
+        // Calculate equilibrium
+        uint256 equilibrium = calculateEquilibrium(marketId);
+
+        market.status = MarketStatus.Resolved;
+        market.resolution = percentage;
+        market.equilibrium = equilibrium;
+
+        // Mark oracle data as used
+        oracleResolver.markResolved(market.oracleId);
+
+        emit MarketResolved(marketId, percentage, equilibrium);
     }
 
     /**

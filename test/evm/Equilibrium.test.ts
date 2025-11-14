@@ -33,12 +33,25 @@ describe("Equilibrium Calculation", function () {
     await dealerNFT.write.mint([dealer1.account.address, 1n]);
     await dealerNFT.write.setPermissions([1n, 1n, [0xFFn]]);
 
+    // Deploy OracleResolver
+    const oracleImpl = await viem.deployContract("OracleResolver");
+    const oracleInitData = encodeFunctionData({
+      abi: parseAbi(["function initialize()"]),
+      functionName: "initialize",
+      args: [],
+    });
+    const oracleProxy = await viem.deployContract("ERC1967Proxy", [
+      oracleImpl.address,
+      oracleInitData,
+    ]);
+    const oracleResolver = await viem.getContractAt("OracleResolver", oracleProxy.address);
+
     // Deploy PredictionMarket
     const marketImpl = await viem.deployContract("PredictionMarket");
     const marketInitData = encodeFunctionData({
-      abi: parseAbi(["function initialize(address)"]),
+      abi: parseAbi(["function initialize(address,address)"]),
       functionName: "initialize",
-      args: [dealerNFT.address],
+      args: [dealerNFT.address, oracleResolver.address],
     });
     const marketProxy = await viem.deployContract("ERC1967Proxy", [
       marketImpl.address,
@@ -49,6 +62,7 @@ describe("Equilibrium Calculation", function () {
     return {
       market,
       dealerNFT,
+      oracleResolver,
       owner,
       dealer1,
       predictor1,
@@ -66,7 +80,7 @@ describe("Equilibrium Calculation", function () {
     const deadline = block.timestamp + 86401n;
 
     await fixtures.market.write.createMarket(
-      [1n, 1n, 1n, deadline, "Equilibrium test market"],
+      [1n, 1n, 1n, deadline, "Equilibrium test market", "0x0000000000000000000000000000000000000000000000000000000000000000"],
       { account: fixtures.dealer1.account }
     );
 
