@@ -12,7 +12,7 @@ const ZERO_ORACLE_ID =
 describe("PredictionMarket (USDC)", function () {
   describe("Initialization", function () {
     it("sets core dependencies and owner", async function () {
-      const { market, owner, dealerNFT, oracleResolver, stakeToken } =
+      const { market, dealerNFT, oracleResolver, stakeToken } =
         await deployPredictionFixture();
 
       expect(getAddress(await market.read.dealerNFT())).to.equal(

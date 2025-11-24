@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import hre from "hardhat";
-import { getAddress, parseEther, encodeFunctionData, parseAbi } from "viem";
+import { encodeFunctionData, parseAbi } from "viem";
 
 const { viem } = hre;
 
@@ -56,7 +56,7 @@ describe("DealerNFT", function () {
 
   describe("Minting", function () {
     it("Should mint NFT to dealer", async function () {
-      const { dealerNFT, dealer1, owner } = await deployDealerNFTFixture();
+      const { dealerNFT, dealer1 } = await deployDealerNFTFixture();
 
       await dealerNFT.write.mint([dealer1.account.address, 1n]);
 
@@ -166,7 +166,7 @@ describe("DealerNFT", function () {
 
   describe("Upgrade", function () {
     it("Should only allow owner to upgrade", async function () {
-      const { dealerNFT, implementation, other } = await deployDealerNFTFixture();
+      const { dealerNFT, other } = await deployDealerNFTFixture();
 
       // Deploy new implementation
       const newImplementation = await viem.deployContract("DealerNFT");

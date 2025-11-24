@@ -1,4 +1,4 @@
-import { createWalletClient, createPublicClient, http, parseAbi } from "viem";
+import { createWalletClient, createPublicClient, http } from "viem";
 import { sepolia } from "viem/chains";
 import { PredictionClient } from "../../src/unified/index.js";
 

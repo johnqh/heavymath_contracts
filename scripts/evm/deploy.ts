@@ -39,7 +39,7 @@ async function main() {
     oracleImpl.address,
     oracleInitData,
   ]);
-  const oracleResolver = await viem.getContractAt('OracleResolver', oracleProxy.address);
+  await viem.getContractAt('OracleResolver', oracleProxy.address);
   console.log('🔮 OracleResolver proxy:', oracleProxy.address);
 
   const predictionImpl = await viem.deployContract('PredictionMarket');

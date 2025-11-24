@@ -1,4 +1,4 @@
-import type { Abi, Address, Hash, PublicClient, WalletClient } from "viem";
+import type { Abi, Address, Chain, Hash, PublicClient, WalletClient } from "viem";
 import { erc20Abi, getAddress } from "viem";
 import { createRequire } from "module";
 
@@ -10,6 +10,7 @@ const predictionArtifact = require(
 export interface WalletContext {
   walletClient: WalletClient;
   publicClient?: PublicClient;
+  chain?: Chain;
 }
 
 export interface ContractAddresses {
@@ -104,6 +105,8 @@ export class EVMPredictionClient {
       abi: erc20Abi,
       functionName: "approve",
       args: [spender, amount],
+      chain: wallet.chain || null,
+      account: wallet.walletClient.account || null,
     });
   }
 
@@ -117,6 +120,8 @@ export class EVMPredictionClient {
       abi: this.abi,
       functionName,
       args,
+      chain: wallet.chain || null,
+      account: wallet.walletClient.account || null,
     });
 
     if (wallet.publicClient) {
@@ -256,7 +261,7 @@ export class EVMPredictionClient {
       functionName: "markets",
       args: [marketId],
     });
-    return formatMarket(raw);
+    return formatMarket(raw as readonly unknown[]);
   }
 
   async getPrediction(
@@ -264,12 +269,12 @@ export class EVMPredictionClient {
     marketId: bigint,
     account: Address
   ) {
-    const raw = await publicClient.readContract({
+    const raw = (await publicClient.readContract({
       address: this.predictionMarketAddress(),
       abi: this.abi,
       functionName: "predictions",
       args: [marketId, account],
-    });
+    })) as readonly [bigint, bigint, bigint, boolean];
     return {
       amount: BigInt(raw[0]),
       percentage: BigInt(raw[1]),
@@ -279,19 +284,19 @@ export class EVMPredictionClient {
   }
 }
 
-function formatMarket(raw: any) {
+function formatMarket(raw: readonly unknown[]) {
   return {
-    dealer: getAddress(raw[0]),
-    tokenId: BigInt(raw[1]),
-    category: BigInt(raw[2]),
-    subCategory: BigInt(raw[3]),
-    deadline: BigInt(raw[4]),
+    dealer: getAddress(raw[0] as string),
+    tokenId: BigInt(raw[1] as bigint),
+    category: BigInt(raw[2] as bigint),
+    subCategory: BigInt(raw[3] as bigint),
+    deadline: BigInt(raw[4] as bigint),
     description: raw[5] as string,
-    createdAt: BigInt(raw[6]),
-    dealerFeeBps: BigInt(raw[7]),
-    status: Number(raw[8]),
-    resolution: BigInt(raw[9]),
-    equilibrium: BigInt(raw[10]),
+    createdAt: BigInt(raw[6] as bigint),
+    dealerFeeBps: BigInt(raw[7] as bigint),
+    status: Number(raw[8] as number),
+    resolution: BigInt(raw[9] as bigint),
+    equilibrium: BigInt(raw[10] as bigint),
     oracleId: raw[11] as `0x${string}`,
   };
 }
