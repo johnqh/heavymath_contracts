@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run typecheck:*)"
+      "Bash(npm run typecheck:*)",
+      "Bash(chmod:*)",
+      "Bash(tree:*)",
+      "Bash(npm run compile:*)",
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nFix viem v2 compatibility and add build tooling\n\nUpdates TypeScript client code to work with viem v2 API requirements and adds proper linting configuration.\n\nChanges:\n- Install ethers@6.15.0 for typechain compatibility\n- Add chain and account parameters to viem writeContract calls\n- Update WalletContext interface to include optional chain property\n- Add type assertions for contract return values to fix TypeScript errors\n- Create eslint.config.js for ESLint v9 compatibility\n- Remove unused imports and variables throughout codebase\n- Fix formatMarket function to use proper TypeScript types\n\nTests: All 28 EVM tests passing\nBuild: Clean compilation with no errors\nLint: No errors or warnings\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nAdd Ponder indexer for prediction market events\n\nComplete blockchain indexer implementation using Ponder to track all events from PredictionMarket, DealerNFT, and OracleResolver contracts across multiple EVM chains.\n\nFeatures:\n- Database schema with 10 onchain tables for comprehensive event tracking\n- Event handlers for all 16 contract events with placeholder business logic\n- Multi-chain support (Ethereum, Polygon, Optimism, Base, Arbitrum, Sepolia)\n- RPC provider configuration with automatic failover\n- Contract ABI integration and type safety\n- Scripts for setup and ABI synchronization\n- GitHub Actions CI/CD workflow\n- ESLint and Prettier configuration\n\nEvent Coverage:\n- PredictionMarket: 11 events (market lifecycle, predictions, claims, fees)\n- DealerNFT: 3 events (license management, permissions, transfers)\n- OracleResolver: 3 events (oracle registration, data updates, authorization)\n\nBuild: Clean with no errors\nLint: No errors, only acceptable config warnings\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []

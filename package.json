@@ -1,6 +1,6 @@
 {
-  "name": "@heavymath/prediction-contracts",
-  "version": "0.1.0",
+  "name": "@sudobility/heavymath_contracts",
+  "version": "0.1.1",
   "type": "module",
   "main": "dist/unified/src/unified/index.js",
   "types": "dist/unified/src/unified/index.d.ts",
