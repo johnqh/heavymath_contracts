@@ -30,6 +30,6 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*", "test/**/*", "scripts/**/*"],
-  "exclude": ["node_modules", "dist", "artifacts", "cache", "typechain-types"]
+  "include": ["src/**/*", "scripts/**/*"],
+  "exclude": ["node_modules", "dist", "artifacts", "cache", "typechain-types", "test"]
 }

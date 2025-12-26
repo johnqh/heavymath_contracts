@@ -1,3 +1,4 @@
+import "@nomicfoundation/hardhat-viem";
 import hre from "hardhat";
 import { encodeFunctionData, parseAbi, parseUnits } from "viem";
 

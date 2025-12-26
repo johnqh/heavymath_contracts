@@ -1,3 +1,4 @@
+import '@nomicfoundation/hardhat-viem';
 import * as fs from 'fs';
 import * as path from 'path';
 import hre from 'hardhat';
@@ -46,7 +47,7 @@ async function main() {
   const predictionInitData = encodeFunctionData({
     abi: parseAbi(['function initialize(address,address,address)']),
     functionName: 'initialize',
-    args: [dealerNFTProxy.address, oracleProxy.address, usdcAddress],
+    args: [dealerNFTProxy.address, oracleProxy.address, usdcAddress as `0x${string}`],
   });
   const predictionProxy = await viem.deployContract('ERC1967Proxy', [
     predictionImpl.address,
