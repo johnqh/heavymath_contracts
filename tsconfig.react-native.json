@@ -1,0 +1,32 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist/react-native",
+    "module": "ESNext",
+    "target": "ES2020",
+    "moduleResolution": "node10",
+    "ignoreDeprecations": "5.0",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "jsx": "react-native",
+    "lib": ["ES2020"],
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationMap": true
+  },
+  "include": [
+    "src/react-native/**/*",
+    "src/unified/**/*",
+    "src/utils/**/*",
+    "src/evm/**/*",
+    "src/solana/**/*",
+    "typechain-types/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test/**/*",
+    "target/types/**/*",
+    "src/react/**/*"
+  ]
+}

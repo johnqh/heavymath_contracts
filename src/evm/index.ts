@@ -1,11 +1,12 @@
 import type { Abi, Address, Chain, Hash, PublicClient, WalletClient } from "viem";
 import { erc20Abi, getAddress } from "viem";
-import { createRequire } from "module";
+import { PredictionMarket__factory } from "../../typechain-types/factories/contracts/PredictionMarket__factory";
 
-const require = createRequire(import.meta.url);
-const predictionArtifact = require(
-  "../../artifacts/contracts/PredictionMarket.sol/PredictionMarket.json"
-);
+// Export TypeChain types for production contracts
+export { PredictionMarket__factory } from "../../typechain-types/factories/contracts/PredictionMarket__factory";
+export type { PredictionMarket } from "../../typechain-types/contracts/PredictionMarket";
+
+const PREDICTION_MARKET_ABI = PredictionMarket__factory.abi as Abi;
 
 export interface WalletContext {
   walletClient: WalletClient;
@@ -39,7 +40,7 @@ export class EVMPredictionClient {
 
   constructor(addresses: ContractAddresses) {
     this.addresses = addresses;
-    this.abi = predictionArtifact.abi as Abi;
+    this.abi = PREDICTION_MARKET_ABI;
   }
 
   private predictionMarketAddress(): Address {
