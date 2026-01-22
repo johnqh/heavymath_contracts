@@ -1,6 +1,6 @@
 {
   "name": "@sudobility/heavymath_contracts",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "type": "module",
   "main": "dist/unified/src/unified/index.js",
   "types": "dist/unified/src/unified/index.d.ts",
@@ -134,7 +134,7 @@
   "peerDependencies": {
     "@solana/spl-token": ">=0.4.0",
     "@solana/web3.js": ">=1.95.0",
-    "@sudobility/heavymath_types": "^0.0.2",
+    "@sudobility/heavymath_types": "^0.0.6",
     "@tanstack/react-query": ">=5.0.0",
     "buffer": ">=6.0.0",
     "react": "^18.0.0 || ^19.0.0",
@@ -187,7 +187,7 @@
     "@solana/spl-token": "^0.4.14",
     "@solana/wallet-adapter-base": "^0.9.27",
     "@solana/web3.js": "^1.98.4",
-    "@sudobility/heavymath_types": "^0.0.2",
+    "@sudobility/heavymath_types": "^0.0.6",
     "@tanstack/react-query": "^5.90.1",
     "@typechain/ethers-v6": "^0.5.1",
     "@typechain/hardhat": "^9.1.0",
