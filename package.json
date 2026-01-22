@@ -1,6 +1,6 @@
 {
   "name": "@sudobility/heavymath_contracts",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "type": "module",
   "main": "dist/unified/src/unified/index.js",
   "types": "dist/unified/src/unified/index.d.ts",
@@ -78,6 +78,7 @@
     "prepare-upgrade:evm": "npx hardhat run scripts/evm/prepare-upgrade.ts",
     "lint": "eslint --ext .ts,.js .",
     "lint:fix": "eslint --ext .ts,.js . --fix",
+    "pretypecheck": "npx hardhat compile",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"**/*.{ts,js,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,md}\""
