@@ -1,6 +1,6 @@
 {
   "name": "@sudobility/heavymath_contracts",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "type": "module",
   "main": "dist/unified/src/unified/index.js",
   "types": "dist/unified/src/unified/index.d.ts",
@@ -135,7 +135,9 @@
   "peerDependencies": {
     "@solana/spl-token": ">=0.4.0",
     "@solana/web3.js": ">=1.95.0",
-    "@sudobility/heavymath_types": "^0.0.6",
+    "@sudobility/configs": "^0.0.62",
+    "@sudobility/heavymath_types": "^0.0.7",
+    "@sudobility/types": "^1.9.50",
     "@tanstack/react-query": ">=5.0.0",
     "buffer": ">=6.0.0",
     "react": "^18.0.0 || ^19.0.0",
@@ -150,6 +152,9 @@
       "optional": true
     },
     "@solana/web3.js": {
+      "optional": true
+    },
+    "@sudobility/configs": {
       "optional": true
     },
     "react": {
@@ -188,7 +193,9 @@
     "@solana/spl-token": "^0.4.14",
     "@solana/wallet-adapter-base": "^0.9.27",
     "@solana/web3.js": "^1.98.4",
-    "@sudobility/heavymath_types": "^0.0.6",
+    "@sudobility/configs": "^0.0.62",
+    "@sudobility/heavymath_types": "^0.0.7",
+    "@sudobility/types": "^1.9.50",
     "@tanstack/react-query": "^5.90.1",
     "@typechain/ethers-v6": "^0.5.1",
     "@typechain/hardhat": "^9.1.0",
@@ -216,9 +223,7 @@
     "viem": "^2.38.4"
   },
   "dependencies": {
-    "@openzeppelin/contracts-upgradeable": "^5.0.0",
-    "@sudobility/configs": "^0.0.61",
-    "@sudobility/types": "^1.9.49"
+    "@openzeppelin/contracts-upgradeable": "^5.0.0"
   },
   "overrides": {
     "bigint-buffer": "^1.1.5"
