@@ -57,6 +57,9 @@ export async function deployPredictionFixture() {
   ]);
   const market = await viem.getContractAt("PredictionMarket", marketProxy.address);
 
+  // Register PredictionMarket as authorized caller on OracleResolver
+  await oracleResolver.write.setPredictionMarket([market.address]);
+
   const initialBalance = toUSDC("100000");
   const wallets = [dealer1, dealer2, predictor1, predictor2, predictor3];
   for (const wallet of wallets) {

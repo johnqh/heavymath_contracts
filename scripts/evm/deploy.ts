@@ -40,7 +40,7 @@ async function main() {
     oracleImpl.address,
     oracleInitData,
   ]);
-  await viem.getContractAt('OracleResolver', oracleProxy.address);
+  const oracleResolver = await viem.getContractAt('OracleResolver', oracleProxy.address);
   console.log('🔮 OracleResolver proxy:', oracleProxy.address);
 
   const predictionImpl = await viem.deployContract('PredictionMarket');
@@ -56,6 +56,10 @@ async function main() {
   const predictionMarket = await viem.getContractAt('PredictionMarket', predictionProxy.address);
   console.log('📈 PredictionMarket proxy:', predictionProxy.address);
 
+  // Register PredictionMarket as authorized caller on OracleResolver
+  await oracleResolver.write.setPredictionMarket([predictionProxy.address]);
+  console.log('🔗 OracleResolver.setPredictionMarket set to PredictionMarket');
+
   const newOwner = ownerMultisig ?? deployer.account.address;
   if (ownerMultisig) {
     console.log('🔑 Transferring ownership to', ownerMultisig);
@@ -64,6 +68,9 @@ async function main() {
   }
   if (ownerMultisig) {
     await dealerNFT.write.transferOwnership([ownerMultisig], {
+      account: deployer.account,
+    });
+    await oracleResolver.write.transferOwnership([ownerMultisig], {
       account: deployer.account,
     });
     await predictionMarket.write.transferOwnership([ownerMultisig], {

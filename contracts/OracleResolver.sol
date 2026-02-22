@@ -59,6 +59,9 @@ contract OracleResolver is
     /// @notice Mapping: updater => authorized
     mapping(address => bool) public authorizedUpdaters;
 
+    /// @notice Address of the PredictionMarket contract (authorized to call markResolved)
+    address public predictionMarket;
+
     /// @notice Events
     event OracleRegistered(
         bytes32 indexed oracleId,
@@ -76,6 +79,7 @@ contract OracleResolver is
     );
 
     event UpdaterAuthorized(address indexed updater, bool authorized);
+    event PredictionMarketSet(address indexed predictionMarket);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -189,12 +193,24 @@ contract OracleResolver is
     }
 
     /**
+     * @notice Set the PredictionMarket contract address (authorized to call markResolved)
+     * @param _predictionMarket Address of the PredictionMarket contract
+     */
+    function setPredictionMarket(address _predictionMarket) external onlyOwner {
+        require(_predictionMarket != address(0), "Invalid address");
+        predictionMarket = _predictionMarket;
+        emit PredictionMarketSet(_predictionMarket);
+    }
+
+    /**
      * @notice Mark oracle data as used for resolution
      * @param oracleId Oracle identifier
      */
     function markResolved(bytes32 oracleId) external {
-        // This should only be called by PredictionMarket contract
-        // In production, add access control
+        require(
+            msg.sender == predictionMarket || msg.sender == owner(),
+            "Not authorized"
+        );
         latestData[oracleId].isResolved = true;
     }
 
