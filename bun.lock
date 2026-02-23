@@ -17,7 +17,7 @@
         "@solana/spl-token": "^0.4.14",
         "@solana/wallet-adapter-base": "^0.9.27",
         "@solana/web3.js": "^1.98.4",
-        "@sudobility/configs": "^0.0.65",
+        "@sudobility/configs": "^0.0.66",
         "@sudobility/heavymath_types": "^0.0.8",
         "@sudobility/types": "^1.9.54",
         "@tanstack/react-query": "^5.90.1",
@@ -49,7 +49,7 @@
       "peerDependencies": {
         "@solana/spl-token": ">=0.4.0",
         "@solana/web3.js": ">=1.95.0",
-        "@sudobility/configs": "^0.0.65",
+        "@sudobility/configs": "^0.0.66",
         "@sudobility/heavymath_types": "^0.0.8",
         "@sudobility/types": "^1.9.54",
         "@tanstack/react-query": ">=5.0.0",
@@ -498,7 +498,7 @@
 
     "@solidity-parser/parser": ["@solidity-parser/parser@0.20.2", "", {}, "sha512-rbu0bzwNvMcwAjH86hiEAcOeRI2EeK8zCkHDrFykh/Al8mvJeFmjy3UrE7GYQjNwOgbGUUtCn5/k8CB8zIu7QA=="],
 
-    "@sudobility/configs": ["@sudobility/configs@0.0.65", "", { "peerDependencies": { "@sudobility/types": "^1.9.53" } }, "sha512-0ul2Ico2C5l+0YbxGTWnAujrxIKs5KgeI7/0RHzVipwtQfezQBn1BQfFQKemvOEHn+buuN+tK0JIN9hNM4q7EA=="],
+    "@sudobility/configs": ["@sudobility/configs@0.0.66", "", { "peerDependencies": { "@sudobility/types": "^1.9.54" } }, "sha512-qCzxotVBWokWEBl6VQXCRYoVMSoEPg/JKzJ4VGXw7tqXMaCChJ11pulthP1sgIot9QVj9gxFFJHb/zfTGgZz4Q=="],
 
     "@sudobility/heavymath_types": ["@sudobility/heavymath_types@0.0.8", "", { "peerDependencies": { "viem": "^2.0.0" }, "optionalPeers": ["viem"] }, "sha512-+wo9qN0e3xTWhOq4U7QHYY+bkUyOqx87OdW98KZKKeMx+hdNPJiLcnlyYddQo5vvQZSLP3UdpJZcHoB7LZ0ojQ=="],
 
