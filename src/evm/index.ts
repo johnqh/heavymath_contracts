@@ -1,12 +1,8 @@
 import type { Abi, Address, Chain, Hash, PublicClient, WalletClient } from "viem";
 import { erc20Abi, getAddress } from "viem";
-import { PredictionMarket__factory } from "../../typechain-types/factories/contracts/PredictionMarket__factory";
+import { PREDICTION_MARKET_ABI as ABI } from "./prediction-market-abi";
 
-// Export TypeChain types for production contracts
-export { PredictionMarket__factory } from "../../typechain-types/factories/contracts/PredictionMarket__factory";
-export type { PredictionMarket } from "../../typechain-types/contracts/PredictionMarket";
-
-const PREDICTION_MARKET_ABI = PredictionMarket__factory.abi as Abi;
+const PREDICTION_MARKET_ABI = ABI as Abi;
 
 export interface WalletContext {
   walletClient: WalletClient;

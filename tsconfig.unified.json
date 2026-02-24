@@ -15,8 +15,7 @@
     "src/utils/**/*",
     "src/evm/**/*",
     "src/solana/**/*",
-    "src/react/**/*",
-    "typechain-types/**/*"
+    "src/react/**/*"
   ],
   "exclude": [
     "node_modules",

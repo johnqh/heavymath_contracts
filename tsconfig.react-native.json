@@ -19,8 +19,7 @@
     "src/unified/**/*",
     "src/utils/**/*",
     "src/evm/**/*",
-    "src/solana/**/*",
-    "typechain-types/**/*"
+    "src/solana/**/*"
   ],
   "exclude": [
     "node_modules",
