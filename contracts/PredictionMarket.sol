@@ -400,6 +400,27 @@ contract PredictionMarket is
     }
 
     /**
+     * @notice Resolve a market with a pre-computed equilibrium (gas-optimized)
+     * @param marketId Market ID
+     * @param resolution Final percentage result (0-100)
+     * @param equilibrium Pre-computed equilibrium percentage (1-99)
+     * @dev Skips the expensive on-chain calculateEquilibrium() call.
+     *      The caller computes equilibrium off-chain and provides it here.
+     *      Validation is done via _hasTwoSidedMarket() which is cheap.
+     */
+    function resolveMarketWithEquilibrium(uint256 marketId, uint256 resolution, uint256 equilibrium) external {
+        Market storage market = markets[marketId];
+        require(dealerNFT.ownerOf(market.tokenId) == msg.sender, "Not dealer owner");
+        require(market.status == MarketStatus.Active, "Market not active");
+        require(block.timestamp >= market.deadline, "Market still active");
+        require(market.oracleId == bytes32(0), "Oracle controlled market");
+        require(resolution <= 100, "Invalid resolution");
+        require(equilibrium > 0 && equilibrium < 100, "Invalid equilibrium");
+
+        _finalizeResolutionWithEquilibrium(marketId, resolution, equilibrium);
+    }
+
+    /**
      * @notice Resolve a market using oracle data
      * @param marketId Market ID
      * @dev Anyone can call this after deadline if market has oracle configured
@@ -419,6 +440,33 @@ contract PredictionMarket is
         require(timestamp != 0 && timestamp >= market.deadline, "Oracle data too early");
 
         _finalizeResolution(marketId, percentage);
+
+        // Mark oracle data as used (even if market became cancelled)
+        oracleResolver.markResolved(market.oracleId);
+    }
+
+    /**
+     * @notice Resolve an oracle market with a pre-computed equilibrium (gas-optimized)
+     * @param marketId Market ID
+     * @param equilibrium Pre-computed equilibrium percentage (1-99)
+     * @dev Same as resolveMarketWithOracle but skips on-chain equilibrium calculation.
+     */
+    function resolveMarketWithOracleAndEquilibrium(uint256 marketId, uint256 equilibrium) external {
+        Market storage market = markets[marketId];
+        require(market.status == MarketStatus.Active, "Market not active");
+        require(block.timestamp >= market.deadline, "Market still active");
+        require(market.oracleId != bytes32(0), "No oracle configured");
+        require(equilibrium > 0 && equilibrium < 100, "Invalid equilibrium");
+
+        // Get oracle data
+        (uint256 percentage, uint256 timestamp, bool isValid) =
+            oracleResolver.getOracleData(market.oracleId);
+
+        require(isValid, "Oracle data stale");
+        require(percentage <= 100, "Invalid oracle percentage");
+        require(timestamp != 0 && timestamp >= market.deadline, "Oracle data too early");
+
+        _finalizeResolutionWithEquilibrium(marketId, percentage, equilibrium);
 
         // Mark oracle data as used (even if market became cancelled)
         oracleResolver.markResolved(market.oracleId);
@@ -587,6 +635,30 @@ contract PredictionMarket is
         Market storage market = markets[marketId];
 
         uint256 equilibrium = calculateEquilibrium(marketId);
+        market.equilibrium = equilibrium;
+
+        if (!_hasTwoSidedMarket(marketId, equilibrium)) {
+            market.status = MarketStatus.Cancelled;
+            emit MarketCancelled(marketId);
+            return;
+        }
+
+        market.status = MarketStatus.Resolved;
+        market.resolution = resolution;
+
+        emit MarketResolved(marketId, resolution, equilibrium);
+    }
+
+    /**
+     * @notice Internal helper to finalize resolution with a pre-computed equilibrium
+     * @param marketId Market ID
+     * @param resolution Final percentage result
+     * @param equilibrium Pre-computed equilibrium percentage
+     * @dev Skips calculateEquilibrium(); only validates via _hasTwoSidedMarket()
+     */
+    function _finalizeResolutionWithEquilibrium(uint256 marketId, uint256 resolution, uint256 equilibrium) internal {
+        Market storage market = markets[marketId];
+
         market.equilibrium = equilibrium;
 
         if (!_hasTwoSidedMarket(marketId, equilibrium)) {

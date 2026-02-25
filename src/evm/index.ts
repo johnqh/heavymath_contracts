@@ -214,11 +214,35 @@ export class EVMPredictionClient {
     return this.execute(wallet, "resolveMarket", [marketId, resolution]);
   }
 
+  async resolveMarketWithEquilibrium(
+    wallet: WalletContext,
+    marketId: bigint,
+    resolution: bigint,
+    equilibrium: bigint
+  ): Promise<TransactionResult> {
+    return this.execute(wallet, "resolveMarketWithEquilibrium", [
+      marketId,
+      resolution,
+      equilibrium,
+    ]);
+  }
+
   async resolveMarketWithOracle(
     wallet: WalletContext,
     marketId: bigint
   ): Promise<TransactionResult> {
     return this.execute(wallet, "resolveMarketWithOracle", [marketId]);
+  }
+
+  async resolveMarketWithOracleAndEquilibrium(
+    wallet: WalletContext,
+    marketId: bigint,
+    equilibrium: bigint
+  ): Promise<TransactionResult> {
+    return this.execute(wallet, "resolveMarketWithOracleAndEquilibrium", [
+      marketId,
+      equilibrium,
+    ]);
   }
 
   async claimWinnings(

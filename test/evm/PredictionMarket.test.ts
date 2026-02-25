@@ -199,6 +199,140 @@ describe("PredictionMarket (USDC)", function () {
       expect(ownerAfter - ownerBefore).to.equal(toUSDC("0.2"));
     });
 
+    it("resolves with pre-computed equilibrium (gas-optimized)", async function () {
+      const { market, dealer1, predictor1, predictor2, publicClient, stakeToken } =
+        await deployPredictionFixture();
+      const block = await publicClient.getBlock();
+      const deadline = block.timestamp + 86401n;
+
+      await market.write.createMarket(
+        [1n, 1n, 1n, deadline, "Pre-computed eq", ZERO_ORACLE_ID],
+        { account: dealer1.account }
+      );
+      await market.write.setDealerFee([1n, 100n], { account: dealer1.account }); // 1%
+
+      await market.write.placePrediction([1n, 40n, toUSDC("100")], {
+        account: predictor1.account,
+      });
+      await market.write.placePrediction([1n, 80n, toUSDC("100")], {
+        account: predictor2.account,
+      });
+
+      await advanceTime(86401);
+
+      // Pre-computed equilibrium = 50 (same as what on-chain would compute)
+      await market.write.resolveMarketWithEquilibrium([1n, 70n, 50n], {
+        account: dealer1.account,
+      });
+
+      const marketData = await market.read.markets([1n]);
+      expect(marketData[8]).to.equal(2); // Resolved
+      expect(marketData[10]).to.equal(50n); // equilibrium = 50
+
+      // Verify same payout as standard resolveMarket
+      const winnerBefore = await stakeToken.read.balanceOf([predictor2.account.address]);
+      await market.write.claimWinnings([1n], { account: predictor2.account });
+      const winnerAfter = await stakeToken.read.balanceOf([predictor2.account.address]);
+      expect(winnerAfter - winnerBefore).to.equal(toUSDC("197.8"));
+    });
+
+    it("rejects invalid equilibrium values (0 and 100)", async function () {
+      const { market, dealer1, predictor1, predictor2, publicClient } =
+        await deployPredictionFixture();
+      const block = await publicClient.getBlock();
+      const deadline = block.timestamp + 86401n;
+
+      await market.write.createMarket(
+        [1n, 1n, 1n, deadline, "Bad eq values", ZERO_ORACLE_ID],
+        { account: dealer1.account }
+      );
+
+      await market.write.placePrediction([1n, 30n, toUSDC("100")], {
+        account: predictor1.account,
+      });
+      await market.write.placePrediction([1n, 70n, toUSDC("100")], {
+        account: predictor2.account,
+      });
+
+      await advanceTime(86401);
+
+      try {
+        await market.write.resolveMarketWithEquilibrium([1n, 50n, 0n], {
+          account: dealer1.account,
+        });
+        expect.fail("Should have thrown for equilibrium=0");
+      } catch (error: any) {
+        expect(error.message).to.include("Invalid equilibrium");
+      }
+
+      try {
+        await market.write.resolveMarketWithEquilibrium([1n, 50n, 100n], {
+          account: dealer1.account,
+        });
+        expect.fail("Should have thrown for equilibrium=100");
+      } catch (error: any) {
+        expect(error.message).to.include("Invalid equilibrium");
+      }
+    });
+
+    it("rejects non-dealer calling resolveMarketWithEquilibrium", async function () {
+      const { market, dealer1, predictor1, predictor2, publicClient } =
+        await deployPredictionFixture();
+      const block = await publicClient.getBlock();
+      const deadline = block.timestamp + 86401n;
+
+      await market.write.createMarket(
+        [1n, 1n, 1n, deadline, "Auth check", ZERO_ORACLE_ID],
+        { account: dealer1.account }
+      );
+
+      await market.write.placePrediction([1n, 30n, toUSDC("100")], {
+        account: predictor1.account,
+      });
+      await market.write.placePrediction([1n, 70n, toUSDC("100")], {
+        account: predictor2.account,
+      });
+
+      await advanceTime(86401);
+
+      try {
+        await market.write.resolveMarketWithEquilibrium([1n, 50n, 50n], {
+          account: predictor1.account,
+        });
+        expect.fail("Should have thrown");
+      } catch (error: any) {
+        expect(error.message).to.include("Not dealer owner");
+      }
+    });
+
+    it("auto-cancels one-sided market with pre-computed equilibrium", async function () {
+      const { market, dealer1, predictor1, publicClient } =
+        await deployPredictionFixture();
+      const block = await publicClient.getBlock();
+      const deadline = block.timestamp + 86401n;
+
+      await market.write.createMarket(
+        [1n, 1n, 1n, deadline, "One sided eq", ZERO_ORACLE_ID],
+        { account: dealer1.account }
+      );
+
+      await market.write.placePrediction([1n, 20n, toUSDC("200")], {
+        account: predictor1.account,
+      });
+
+      await advanceTime(86401);
+
+      // Even with pre-computed equilibrium, _hasTwoSidedMarket check will cancel
+      await market.write.resolveMarketWithEquilibrium([1n, 10n, 50n], {
+        account: dealer1.account,
+      });
+
+      const state = await market.read.markets([1n]);
+      expect(state[8]).to.equal(1); // Cancelled
+      const refund = await market.read.getRefundAmount([1n, predictor1.account.address]);
+      expect(refund).to.equal(toUSDC("200"));
+    });
+
     it("validates oracle timestamps before resolving", async function () {
       const { market, dealer1, oracleResolver, owner, publicClient, predictor1, predictor2 } =
         await deployPredictionFixture();
