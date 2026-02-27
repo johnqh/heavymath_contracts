@@ -60,3 +60,6 @@ deployments/*
 # Temporary files
 tmp/
 temp/
+
+# Claude Code local settings
+.claude/settings.local.json
