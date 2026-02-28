@@ -18,8 +18,8 @@
         "@solana/spl-token": "^0.4.14",
         "@solana/wallet-adapter-base": "^0.9.27",
         "@solana/web3.js": "^1.98.4",
-        "@sudobility/configs": "^0.0.66",
-        "@sudobility/heavymath_types": "^0.0.9",
+        "@sudobility/configs": "^0.0.67",
+        "@sudobility/heavymath_types": "^0.0.10",
         "@sudobility/types": "^1.9.55",
         "@tanstack/react-query": "^5.90.1",
         "@typechain/ethers-v6": "^0.5.1",
@@ -50,8 +50,8 @@
       "peerDependencies": {
         "@solana/spl-token": ">=0.4.0",
         "@solana/web3.js": ">=1.95.0",
-        "@sudobility/configs": "^0.0.66",
-        "@sudobility/heavymath_types": "^0.0.9",
+        "@sudobility/configs": "^0.0.67",
+        "@sudobility/heavymath_types": "^0.0.10",
         "@sudobility/types": "^1.9.55",
         "@tanstack/react-query": ">=5.0.0",
         "buffer": ">=6.0.0",
@@ -499,9 +499,9 @@
 
     "@solidity-parser/parser": ["@solidity-parser/parser@0.20.2", "", {}, "sha512-rbu0bzwNvMcwAjH86hiEAcOeRI2EeK8zCkHDrFykh/Al8mvJeFmjy3UrE7GYQjNwOgbGUUtCn5/k8CB8zIu7QA=="],
 
-    "@sudobility/configs": ["@sudobility/configs@0.0.66", "", { "peerDependencies": { "@sudobility/types": "^1.9.54" } }, "sha512-qCzxotVBWokWEBl6VQXCRYoVMSoEPg/JKzJ4VGXw7tqXMaCChJ11pulthP1sgIot9QVj9gxFFJHb/zfTGgZz4Q=="],
+    "@sudobility/configs": ["@sudobility/configs@0.0.67", "", { "peerDependencies": { "@sudobility/types": "^1.9.55" } }, "sha512-y6pZcbgxRLv3AbStTCNolhs7q87gzvI033s5IPbzV6cbUN0GmVfjGShLz4icncYTNiGIvc/ifFI5p2alneYBJw=="],
 
-    "@sudobility/heavymath_types": ["@sudobility/heavymath_types@0.0.9", "", { "peerDependencies": { "viem": "^2.0.0" }, "optionalPeers": ["viem"] }, "sha512-iJasGCiBORLypqzSD/3a3dApIpzSHJxqx8u3xpNlCO29lAMfjlDP487AEbbSXSoofdKuZZ2Qn4qzX00kkTEdKA=="],
+    "@sudobility/heavymath_types": ["@sudobility/heavymath_types@0.0.10", "", { "peerDependencies": { "viem": "^2.0.0" }, "optionalPeers": ["viem"] }, "sha512-n6h4TeDmS0ZohMVSsYKiL/L+SFBU2M5eg5G5vBiXYg3TSMCNcNqH4CjvlkFZC34xK+OXZ1vCxLCHHpC8jRtkzQ=="],
 
     "@sudobility/types": ["@sudobility/types@1.9.55", "", {}, "sha512-cl8RwuaKSa6hBTuH7ipTXtJH1dLQCtLJsxEnwMmKvpCN+RINP6nR8VDUTmHONLP1IQ1pSPBvUmR0Ip+J63cL5g=="],
 
