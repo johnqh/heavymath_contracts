@@ -2,7 +2,7 @@ import '@nomicfoundation/hardhat-viem';
 import * as fs from 'fs';
 import * as path from 'path';
 import hre from 'hardhat';
-import { encodeFunctionData, parseAbi } from 'viem';
+import { encodeFunctionData, parseAbi, parseEther } from 'viem';
 
 async function main() {
   const { viem, network } = hre;
@@ -19,9 +19,9 @@ async function main() {
 
   const dealerNFTImpl = await viem.deployContract('DealerNFT');
   const dealerNFTInitData = encodeFunctionData({
-    abi: parseAbi(['function initialize()']),
+    abi: parseAbi(['function initialize(uint256)']),
     functionName: 'initialize',
-    args: [],
+    args: [parseEther('0.05')],
   });
   const dealerNFTProxy = await viem.deployContract('ERC1967Proxy', [
     dealerNFTImpl.address,

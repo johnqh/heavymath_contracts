@@ -14,17 +14,18 @@ export async function deployPredictionFixture() {
 
   const dealerNFTImpl = await viem.deployContract("DealerNFT");
   const dealerNFTInitData = encodeFunctionData({
-    abi: parseAbi(["function initialize()"]),
+    abi: parseAbi(["function initialize(uint256)"]),
     functionName: "initialize",
-    args: [],
+    args: [0n], // Free minting in tests
   });
   const dealerNFTProxy = await viem.deployContract("ERC1967Proxy", [
     dealerNFTImpl.address,
     dealerNFTInitData,
   ]);
   const dealerNFT = await viem.getContractAt("DealerNFT", dealerNFTProxy.address);
-  await dealerNFT.write.mint([dealer1.account.address, 1n]);
-  await dealerNFT.write.mint([dealer2.account.address, 2n]);
+  // Mint dealer licenses (mintPrice=0 so no ETH needed)
+  await dealerNFT.write.mint({ account: dealer1.account });
+  await dealerNFT.write.mint({ account: dealer2.account });
   await dealerNFT.write.setPermissions([1n, 1n, [0xFFn]]);
   await dealerNFT.write.setPermissions([2n, 1n, [1n, 2n]]);
 

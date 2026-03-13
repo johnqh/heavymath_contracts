@@ -12,6 +12,9 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
  * @notice NFT-based dealer licensing system with category/subcategory permissions
  * @dev UUPS upgradeable pattern with permission management using 0xFF wildcards
  *
+ * Anyone can mint a dealer license by paying the mint price in ETH.
+ * The owner can update the mint price and withdraw collected fees.
+ *
  * Permission System:
  * - Dealers receive an NFT license (tokenId)
  * - Each license has permissions for category/subcategory combinations
@@ -33,6 +36,12 @@ contract DealerNFT is
     /// @notice Wildcard value for "all" categories or subcategories
     uint256 public constant WILDCARD = 0xFF;
 
+    /// @notice Price to mint a dealer license in wei
+    uint256 public mintPrice;
+
+    /// @notice Auto-incrementing token ID counter
+    uint256 private _nextTokenId;
+
     /// @notice Permissions mapping: tokenId → category → subcategories[]
     mapping(uint256 => mapping(uint256 => uint256[])) private _permissions;
 
@@ -48,6 +57,9 @@ contract DealerNFT is
     /// @notice Emitted when a license is transferred
     event LicenseTransferred(uint256 indexed tokenId, address indexed from, address indexed to);
 
+    /// @notice Emitted when the mint price is updated
+    event MintPriceUpdated(uint256 oldPrice, uint256 newPrice);
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -55,22 +67,46 @@ contract DealerNFT is
 
     /**
      * @notice Initialize the contract (replaces constructor for upgradeable contracts)
+     * @param _mintPrice Initial mint price in wei
      */
-    function initialize() public initializer {
+    function initialize(uint256 _mintPrice) public initializer {
         __ERC721_init("DealerLicense", "DLICENSE");
         __ERC721Enumerable_init();
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
+        mintPrice = _mintPrice;
+        _nextTokenId = 1;
     }
 
     /**
-     * @notice Mint a new dealer license NFT
-     * @param to Address to receive the NFT
-     * @param tokenId Token ID for the new license
+     * @notice Mint a new dealer license NFT by paying the mint price in ETH
      */
-    function mint(address to, uint256 tokenId) external onlyOwner {
-        _safeMint(to, tokenId);
-        emit LicenseIssued(tokenId, to);
+    function mint() external payable {
+        require(msg.value == mintPrice, "Incorrect payment amount");
+
+        uint256 tokenId = _nextTokenId++;
+        _safeMint(msg.sender, tokenId);
+        emit LicenseIssued(tokenId, msg.sender);
+    }
+
+    /**
+     * @notice Update the mint price (only owner)
+     * @param newPrice New mint price in wei (0 to disable minting)
+     */
+    function setMintPrice(uint256 newPrice) external onlyOwner {
+        uint256 oldPrice = mintPrice;
+        mintPrice = newPrice;
+        emit MintPriceUpdated(oldPrice, newPrice);
+    }
+
+    /**
+     * @notice Withdraw collected ETH to the owner (only owner)
+     */
+    function withdrawPayments() external onlyOwner {
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No payments to withdraw");
+        (bool success, ) = owner().call{value: balance}("");
+        require(success, "Transfer failed");
     }
 
     /**
