@@ -20,7 +20,7 @@
         "@solana/web3.js": "^1.98.4",
         "@sudobility/configs": "^0.0.67",
         "@sudobility/heavymath_types": "^0.0.10",
-        "@sudobility/types": "^1.9.55",
+        "@sudobility/types": "^1.9.57",
         "@tanstack/react-query": "^5.90.1",
         "@typechain/ethers-v6": "^0.5.1",
         "@typechain/hardhat": "^9.1.0",
@@ -52,7 +52,7 @@
         "@solana/web3.js": ">=1.95.0",
         "@sudobility/configs": "^0.0.67",
         "@sudobility/heavymath_types": "^0.0.10",
-        "@sudobility/types": "^1.9.55",
+        "@sudobility/types": "^1.9.57",
         "@tanstack/react-query": ">=5.0.0",
         "buffer": ">=6.0.0",
         "react": "^18.0.0 || ^19.0.0",
@@ -503,7 +503,7 @@
 
     "@sudobility/heavymath_types": ["@sudobility/heavymath_types@0.0.10", "", { "peerDependencies": { "viem": "^2.0.0" }, "optionalPeers": ["viem"] }, "sha512-n6h4TeDmS0ZohMVSsYKiL/L+SFBU2M5eg5G5vBiXYg3TSMCNcNqH4CjvlkFZC34xK+OXZ1vCxLCHHpC8jRtkzQ=="],
 
-    "@sudobility/types": ["@sudobility/types@1.9.55", "", {}, "sha512-cl8RwuaKSa6hBTuH7ipTXtJH1dLQCtLJsxEnwMmKvpCN+RINP6nR8VDUTmHONLP1IQ1pSPBvUmR0Ip+J63cL5g=="],
+    "@sudobility/types": ["@sudobility/types@1.9.57", "", {}, "sha512-POtx/cRagDEdnEwrXfuoyzhNKyGahD7TYJRZT7WYW6+9ID1ZHwWDGkI88KmenKtwsljiJPQZ9+QM7jy13hdv3g=="],
 
     "@swc/helpers": ["@swc/helpers@0.5.18", "", { "dependencies": { "tslib": "^2.8.0" } }, "sha512-TXTnIcNJQEKwThMMqBXsZ4VGAza6bvN4pa41Rkqoio6QBKMvo+5lexeTMScGCIxtzgQJzElcvIltani+adC5PQ=="],
 

@@ -1,4 +1,23 @@
 {
   "description": "Deployment addresses for HeavyMath Prediction Market contracts across different networks",
-  "networks": {}
+  "networks": {
+    "sepolia": {
+      "deployedAt": "2026-03-13T15:59:50.241Z",
+      "deployer": "0x1996d64d8f6e47a5bf6fb92246ef4efd6ae881e0",
+      "stakeToken": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+      "owner": "0x1996d64d8f6e47a5bf6fb92246ef4efd6ae881e0",
+      "dealerNFT": {
+        "implementation": "0x603c1f28e6a2d38b4bd1329da7214ecdc74584f4",
+        "proxy": "0xc74f8d292348cd85d674b08a4cdd41633a2a9554"
+      },
+      "oracleResolver": {
+        "implementation": "0x7060a81467f38fdea80cade2a37680eb558c25f2",
+        "proxy": "0xbb9021221cb946d60d73aa471f4af75ebc2378aa"
+      },
+      "predictionMarket": {
+        "implementation": "0xcd7e9e291d51019ded8183ad9c04b3d2b8be429c",
+        "proxy": "0x982eaeaca7ee7008e540bcc9813053dd831d6a69"
+      }
+    }
+  }
 }
