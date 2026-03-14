@@ -19,7 +19,7 @@
         "@solana/wallet-adapter-base": "^0.9.27",
         "@solana/web3.js": "^1.98.4",
         "@sudobility/configs": "^0.0.68",
-        "@sudobility/heavymath_types": "^0.0.11",
+        "@sudobility/heavymath_types": "^0.0.12",
         "@sudobility/types": "^1.9.57",
         "@tanstack/react-query": "^5.90.1",
         "@typechain/ethers-v6": "^0.5.1",
@@ -51,7 +51,7 @@
         "@solana/spl-token": ">=0.4.0",
         "@solana/web3.js": ">=1.95.0",
         "@sudobility/configs": "^0.0.68",
-        "@sudobility/heavymath_types": "^0.0.11",
+        "@sudobility/heavymath_types": "^0.0.12",
         "@sudobility/types": "^1.9.57",
         "@tanstack/react-query": ">=5.0.0",
         "buffer": ">=6.0.0",
@@ -501,7 +501,7 @@
 
     "@sudobility/configs": ["@sudobility/configs@0.0.68", "", { "peerDependencies": { "@sudobility/types": "^1.9.57" } }, "sha512-KGjkf1aR4n1UU4Mefu9HBrjbfRjx8KTSrN7kU+XsD7a01/Fx4vNg6MG+OLlMrkq0sesjUa8QGNAuMcwKsNO9lQ=="],
 
-    "@sudobility/heavymath_types": ["@sudobility/heavymath_types@0.0.11", "", { "peerDependencies": { "viem": "^2.0.0" }, "optionalPeers": ["viem"] }, "sha512-Fwhzn2vwUexi8mFrjtmb2TA4NUBcHYfjim0IBSYWeJ5Tl1Ek+lqw4SqBkbG0W+bImZ85lBi7ymrn6AXt+eLl8g=="],
+    "@sudobility/heavymath_types": ["@sudobility/heavymath_types@0.0.12", "", { "peerDependencies": { "viem": "^2.0.0" }, "optionalPeers": ["viem"] }, "sha512-CFb3CGLLR7h5MeFzEChs7ZJQ8a7IkKR0jGAcGGUUZXe3T+KBbdYxkbq9ixd1VdSkY/MePz1naozUHSIOSZD2Dg=="],
 
     "@sudobility/types": ["@sudobility/types@1.9.57", "", {}, "sha512-POtx/cRagDEdnEwrXfuoyzhNKyGahD7TYJRZT7WYW6+9ID1ZHwWDGkI88KmenKtwsljiJPQZ9+QM7jy13hdv3g=="],
 
