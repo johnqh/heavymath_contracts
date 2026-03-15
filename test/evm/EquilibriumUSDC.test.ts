@@ -110,8 +110,8 @@ describe("Equilibrium algorithm (USDC)", function () {
     ]);
 
     // Total pool = 450 USDC, but 150 USDC sits at equilibrium and should be refunded.
-    // Winners therefore only split the 300 USDC pool minus fees.
-    expect(winnerAfter - winnerBefore).to.equal(toUSDC("299.67"));
+    // Winners split the 300 USDC pool minus 1% fee (3 USDC) = 297 USDC.
+    expect(winnerAfter - winnerBefore).to.equal(toUSDC("297"));
   });
 });
 
@@ -216,6 +216,6 @@ describe("Equilibrium algorithm with pre-computed equilibrium (USDC)", function 
       predictor3.account.address,
     ]);
 
-    expect(winnerAfter - winnerBefore).to.equal(toUSDC("299.67"));
+    expect(winnerAfter - winnerBefore).to.equal(toUSDC("297"));
   });
 });

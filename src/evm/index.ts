@@ -147,12 +147,18 @@ export class EVMPredictionClient {
     ]);
   }
 
-  async setDealerFee(
+  async setWinnerFeeBps(
     wallet: WalletContext,
-    marketId: bigint,
     feeBps: bigint
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "setDealerFee", [marketId, feeBps]);
+    return this.execute(wallet, "setWinnerFeeBps", [feeBps]);
+  }
+
+  async setDealerSharePercent(
+    wallet: WalletContext,
+    percent: bigint
+  ): Promise<TransactionResult> {
+    return this.execute(wallet, "setDealerSharePercent", [percent]);
   }
 
   async placePrediction(

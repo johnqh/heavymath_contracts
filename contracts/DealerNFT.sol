@@ -48,6 +48,12 @@ contract DealerNFT is
     /// @notice Track which categories have been set for a token (for hasPermissions check)
     mapping(uint256 => uint256[]) private _categoriesSet;
 
+    /// @notice Default permission category applied to newly minted tokens
+    uint256 public defaultPermissionCategory;
+
+    /// @notice Default permission subcategories applied to newly minted tokens
+    uint256[] public defaultPermissionSubCategories;
+
     /// @notice Emitted when a license NFT is issued
     event LicenseIssued(uint256 indexed tokenId, address indexed dealer);
 
@@ -59,6 +65,9 @@ contract DealerNFT is
 
     /// @notice Emitted when the mint price is updated
     event MintPriceUpdated(uint256 oldPrice, uint256 newPrice);
+
+    /// @notice Emitted when default permissions are updated
+    event DefaultPermissionsUpdated(uint256 category, uint256[] subCategories);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -79,13 +88,44 @@ contract DealerNFT is
     }
 
     /**
+     * @notice Set default permissions applied to newly minted tokens (only owner)
+     * @param category The default category (e.g. 1 for SPORTS, or 0xFF for all)
+     * @param subCategories The default subcategories (e.g. [0xFF] for all)
+     */
+    function setDefaultPermissions(
+        uint256 category,
+        uint256[] calldata subCategories
+    ) external onlyOwner {
+        defaultPermissionCategory = category;
+        delete defaultPermissionSubCategories;
+        for (uint256 i = 0; i < subCategories.length; i++) {
+            defaultPermissionSubCategories.push(subCategories[i]);
+        }
+        emit DefaultPermissionsUpdated(category, subCategories);
+    }
+
+    /**
      * @notice Mint a new dealer license NFT by paying the mint price in ETH
+     * @dev Automatically copies defaultPermissions to the new token if set
      */
     function mint() external payable {
         require(msg.value == mintPrice, "Incorrect payment amount");
 
         uint256 tokenId = _nextTokenId++;
         _safeMint(msg.sender, tokenId);
+
+        // Copy default permissions if set
+        if (defaultPermissionSubCategories.length > 0) {
+            uint256 cat = defaultPermissionCategory;
+            uint256[] storage subs = defaultPermissionSubCategories;
+            uint256[] storage dest = _permissions[tokenId][cat];
+            for (uint256 i = 0; i < subs.length; i++) {
+                dest.push(subs[i]);
+            }
+            _categoriesSet[tokenId].push(cat);
+            emit PermissionsSet(tokenId, cat, subs);
+        }
+
         emit LicenseIssued(tokenId, msg.sender);
     }
 
@@ -243,7 +283,7 @@ contract DealerNFT is
 
     /**
      * @dev Storage gap for future upgrades
-     * Reserves 50 storage slots for future variables without shifting existing storage
+     * Reduced from 50 to 48 after adding defaultPermissionCategory and defaultPermissionSubCategories
      */
-    uint256[50] private __gap;
+    uint256[48] private __gap;
 }

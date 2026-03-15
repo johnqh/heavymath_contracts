@@ -22,11 +22,10 @@ import "./OracleResolver.sol";
  * - Predictions at exact equilibrium are auto-refunded
  * - Winners are those who predicted on the correct side of equilibrium
  *
- * Example:
- * - Predictor A bets 1 ETH at 30% (believes 30% chance)
- * - Predictor B bets 2 ETH at 70% (believes 70% chance)
- * - Equilibrium might be at 50% where total below = total above
- * - If actual result is 60%, then B wins (70% > 60% equilibrium)
+ * Fee Structure:
+ * - A single fee (winnerFeeBps, default 1%) is charged on the winning side's distributable pool
+ * - The fee is split between the dealer and the platform (dealerSharePercent, default 50%)
+ * - Both parameters are contract-level and can only be modified by the contract owner
  */
 contract PredictionMarket is
     Initializable,
@@ -45,12 +44,11 @@ contract PredictionMarket is
     /// @notice Additional time after deadline before a market can be abandoned
     uint256 public constant RESOLUTION_GRACE_PERIOD = 24 hours;
 
-    /// @notice Dealer fee bounds (in basis points: 1 bp = 0.01%)
-    uint256 public constant MIN_DEALER_FEE_BPS = 10; // 0.1%
-    uint256 public constant MAX_DEALER_FEE_BPS = 200; // 2%
+    /// @notice Fee charged on the winning side (in basis points: 1 bp = 0.01%), modifiable by owner
+    uint256 public winnerFeeBps; // default 100 = 1%
 
-    /// @notice System fee as percentage of dealer fee
-    uint256 public constant SYSTEM_FEE_PERCENT = 10; // 10% of dealer fee
+    /// @notice Dealer's share of the fee (as percentage 0-100), modifiable by owner
+    uint256 public dealerSharePercent; // default 50 = 50%
 
     /// @notice Market status enum
     enum MarketStatus {
@@ -69,7 +67,7 @@ contract PredictionMarket is
         uint256 deadline; // Prediction deadline timestamp
         string description; // Market description
         uint256 createdAt; // Market creation timestamp
-        uint256 dealerFeeBps; // Dealer fee in basis points
+        uint256 dealerFeeBps; // Deprecated: kept for storage layout compatibility
         MarketStatus status; // Market status
         uint256 resolution; // Resolved percentage (0-100)
         uint256 equilibrium; // Calculated equilibrium point (0-100)
@@ -151,7 +149,8 @@ contract PredictionMarket is
     event MarketCancelled(uint256 indexed marketId);
     event MarketAbandoned(uint256 indexed marketId);
 
-    event DealerFeeSet(uint256 indexed marketId, uint256 feeBps);
+    event WinnerFeeBpsUpdated(uint256 oldBps, uint256 newBps);
+    event DealerSharePercentUpdated(uint256 oldPercent, uint256 newPercent);
 
     event WinningsClaimed(
         uint256 indexed marketId,
@@ -198,6 +197,31 @@ contract PredictionMarket is
         oracleResolver = OracleResolver(_oracleResolver);
         stakeToken = IERC20(_stakeToken);
         marketCounter = 0;
+
+        winnerFeeBps = 100; // 1%
+        dealerSharePercent = 50; // 50/50 split
+    }
+
+    /**
+     * @notice Set the winner fee in basis points (owner only)
+     * @param _winnerFeeBps Fee in basis points (e.g. 100 = 1%)
+     */
+    function setWinnerFeeBps(uint256 _winnerFeeBps) external onlyOwner {
+        require(_winnerFeeBps <= 1000, "Fee too high"); // max 10%
+        uint256 old = winnerFeeBps;
+        winnerFeeBps = _winnerFeeBps;
+        emit WinnerFeeBpsUpdated(old, _winnerFeeBps);
+    }
+
+    /**
+     * @notice Set the dealer's share of the fee as a percentage (owner only)
+     * @param _dealerSharePercent Percentage 0-100 (e.g. 50 = 50%)
+     */
+    function setDealerSharePercent(uint256 _dealerSharePercent) external onlyOwner {
+        require(_dealerSharePercent <= 100, "Invalid percent");
+        uint256 old = dealerSharePercent;
+        dealerSharePercent = _dealerSharePercent;
+        emit DealerSharePercentUpdated(old, _dealerSharePercent);
     }
 
     /**
@@ -247,7 +271,7 @@ contract PredictionMarket is
             deadline: deadline,
             description: description,
             createdAt: block.timestamp,
-            dealerFeeBps: MIN_DEALER_FEE_BPS, // Default to minimum fee
+            dealerFeeBps: 0, // Deprecated field, kept for storage layout
             status: MarketStatus.Active,
             resolution: 0,
             equilibrium: 0,
@@ -265,24 +289,6 @@ contract PredictionMarket is
         );
 
         return marketId;
-    }
-
-    /**
-     * @notice Set dealer fee for a market
-     * @param marketId Market ID
-     * @param feeBps Fee in basis points (10-200, i.e., 0.1%-2%)
-     */
-    function setDealerFee(uint256 marketId, uint256 feeBps) external {
-        Market storage market = markets[marketId];
-        require(dealerNFT.ownerOf(market.tokenId) == msg.sender, "Not dealer owner");
-        require(market.status == MarketStatus.Active, "Market not active");
-        require(
-            feeBps >= MIN_DEALER_FEE_BPS && feeBps <= MAX_DEALER_FEE_BPS,
-            "Fee out of bounds"
-        );
-
-        market.dealerFeeBps = feeBps;
-        emit DealerFeeSet(marketId, feeBps);
     }
 
     /**
@@ -777,6 +783,23 @@ contract PredictionMarket is
     }
 
     /**
+     * @notice Calculate fees for a market's distributable pool
+     * @param distributablePool The pool after removing equilibrium stakes
+     * @return totalFee Total fee amount
+     * @return dealerFee Dealer's share of the fee
+     * @return systemFee Platform's share of the fee
+     */
+    function _calculateFees(uint256 distributablePool)
+        internal
+        view
+        returns (uint256 totalFee, uint256 dealerFee, uint256 systemFee)
+    {
+        totalFee = (distributablePool * winnerFeeBps) / 10000;
+        dealerFee = (totalFee * dealerSharePercent) / 100;
+        systemFee = totalFee - dealerFee;
+    }
+
+    /**
      * @notice Calculate payout for a winner
      * @param marketId Market ID
      * @param predictor Predictor address
@@ -807,11 +830,10 @@ contract PredictionMarket is
         uint256 totalPool = marketPools[marketId];
         uint256 equilibriumAmount = percentageTotals[marketId][market.equilibrium];
         uint256 distributablePool = totalPool > equilibriumAmount ? totalPool - equilibriumAmount : 0;
-        uint256 dealerFee = (distributablePool * market.dealerFeeBps) / 10000;
-        uint256 systemFee = (dealerFee * SYSTEM_FEE_PERCENT) / 100;
+        (uint256 totalFee,,) = _calculateFees(distributablePool);
 
-        // Winner pool = total pool - refundable stakes - fees
-        uint256 winnerPool = distributablePool - dealerFee - systemFee;
+        // Winner pool = distributable pool - total fees
+        uint256 winnerPool = distributablePool - totalFee;
 
         // Get total winning bets
         uint256 totalWinningBets = _calculateTotalWinningBets(marketId);
@@ -894,17 +916,16 @@ contract PredictionMarket is
 
         uint256 feeAmount = dealerFees[marketId];
         if (feeAmount == 0) {
-            // Calculate and store dealer fee
+            // Calculate and store fees on first call
             uint256 totalPool = marketPools[marketId];
-            uint256 dealerFeeBps = market.dealerFeeBps;
             uint256 equilibriumAmount = percentageTotals[marketId][market.equilibrium];
             uint256 distributablePool = totalPool > equilibriumAmount ? totalPool - equilibriumAmount : 0;
-            feeAmount = (distributablePool * dealerFeeBps) / 10000;
+            (, uint256 dealerFee, uint256 systemFee) = _calculateFees(distributablePool);
 
+            feeAmount = dealerFee;
             dealerFees[marketId] = feeAmount;
 
-            // Also calculate and store system fee
-            uint256 systemFee = (feeAmount * SYSTEM_FEE_PERCENT) / 100;
+            // Store system fee
             systemFees[marketId] = systemFee;
             totalSystemFees += systemFee;
         }
@@ -943,5 +964,5 @@ contract PredictionMarket is
     /**
      * @dev Storage gap for future upgrades
      */
-    uint256[50] private __gap;
+    uint256[48] private __gap;
 }

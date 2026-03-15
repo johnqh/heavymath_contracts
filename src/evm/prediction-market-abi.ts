@@ -1,6 +1,5 @@
 // Auto-extracted from PredictionMarket.sol compiled ABI
 // Regenerate with: bun run compile:evm
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const PREDICTION_MARKET_ABI = [
   {
     inputs: [],
@@ -117,19 +116,19 @@ export const PREDICTION_MARKET_ABI = [
     anonymous: false,
     inputs: [
       {
-        indexed: true,
+        indexed: false,
         internalType: "uint256",
-        name: "marketId",
+        name: "oldPercent",
         type: "uint256",
       },
       {
         indexed: false,
         internalType: "uint256",
-        name: "feeBps",
+        name: "newPercent",
         type: "uint256",
       },
     ],
-    name: "DealerFeeSet",
+    name: "DealerSharePercentUpdated",
     type: "event",
   },
   {
@@ -474,20 +473,7 @@ export const PREDICTION_MARKET_ABI = [
   },
   {
     inputs: [],
-    name: "MAX_DEALER_FEE_BPS",
-    outputs: [
-      {
-        internalType: "uint256",
-        name: "",
-        type: "uint256",
-      },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "MIN_DEALER_FEE_BPS",
+    name: "dealerSharePercent",
     outputs: [
       {
         internalType: "uint256",
@@ -526,7 +512,7 @@ export const PREDICTION_MARKET_ABI = [
   },
   {
     inputs: [],
-    name: "SYSTEM_FEE_PERCENT",
+    name: "winnerFeeBps",
     outputs: [
       {
         internalType: "uint256",
@@ -1075,6 +1061,29 @@ export const PREDICTION_MARKET_ABI = [
         name: "marketId",
         type: "uint256",
       },
+      {
+        internalType: "uint256",
+        name: "resolution",
+        type: "uint256",
+      },
+      {
+        internalType: "uint256",
+        name: "equilibrium",
+        type: "uint256",
+      },
+    ],
+    name: "resolveMarketWithEquilibrium",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "marketId",
+        type: "uint256",
+      },
     ],
     name: "resolveMarketWithOracle",
     outputs: [],
@@ -1090,14 +1099,59 @@ export const PREDICTION_MARKET_ABI = [
       },
       {
         internalType: "uint256",
-        name: "feeBps",
+        name: "equilibrium",
         type: "uint256",
       },
     ],
-    name: "setDealerFee",
+    name: "resolveMarketWithOracleAndEquilibrium",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "_winnerFeeBps",
+        type: "uint256",
+      },
+    ],
+    name: "setWinnerFeeBps",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "_dealerSharePercent",
+        type: "uint256",
+      },
+    ],
+    name: "setDealerSharePercent",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "oldBps",
+        type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "newBps",
+        type: "uint256",
+      },
+    ],
+    name: "WinnerFeeBpsUpdated",
+    type: "event",
   },
   {
     inputs: [],

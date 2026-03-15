@@ -2,21 +2,22 @@
   "description": "Deployment addresses for HeavyMath Prediction Market contracts across different networks",
   "networks": {
     "sepolia": {
-      "deployedAt": "2026-03-13T19:21:40.044Z",
+      "deployedAt": "2026-03-14T21:17:40.078Z",
       "deployer": "0x1996d64d8f6e47a5bf6fb92246ef4efd6ae881e0",
       "stakeToken": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
       "owner": "0x1996d64d8f6e47a5bf6fb92246ef4efd6ae881e0",
       "dealerNFT": {
-        "implementation": "0x57e5f20d3b9d75bf214a988fc874dc02bc654e76",
-        "proxy": "0xbe9347eb68f3dcb5b3b28b747aa2cc71b30e2c2d"
+        "implementation": "0x4e9f08ef5dfa45430f9cd4d6810a78f920df41f0",
+        "proxy": "0x62d545189b5caa014de27787f3d996e10c437e35",
+        "upgradedAt": "2026-03-15T00:00:00.000Z"
       },
       "oracleResolver": {
-        "implementation": "0x6a0c51bce0839c911ca9b5f5047ff635b308f026",
-        "proxy": "0x87cc263b45142a120262c6e24fef78ee29af072a"
+        "implementation": "0xade1743f9aae340efcc133b4e85488c92be4d362",
+        "proxy": "0xa926f2087c7fa88542674fd75204d3c6e146d9d2"
       },
       "predictionMarket": {
-        "implementation": "0x8ae830a493617f570a26004991de6dd0a11da72b",
-        "proxy": "0xaeca0a127845dc2f8f29741b1c320a97d6cf6d0c"
+        "implementation": "0xebd800f0d14cac56964ffbefc54118e9042d77d9",
+        "proxy": "0x409464d2e712ffc7e64baa191cac65c731581f05"
       }
     }
   }
