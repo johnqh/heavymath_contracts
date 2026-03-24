@@ -1,6 +1,6 @@
 {
   "name": "@sudobility/heavymath_contracts",
-  "version": "0.1.29",
+  "version": "0.1.30",
   "type": "module",
   "main": "dist/unified/src/unified/index.js",
   "types": "dist/unified/src/unified/index.d.ts",
@@ -104,12 +104,12 @@
     "mobile"
   ],
   "author": "HeavyMath Team",
-  "license": "SEE LICENSE IN LICENSE.md",
+  "license": "BUSL-1.1",
   "description": "Multi-chain prediction market system with UUPS upgradeable contracts, equilibrium-based odds, and unified TypeScript client for EVM chains and Solana.",
   "homepage": "https://github.com/heavymath/heavymath_contracts#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/heavymath/heavymath_contracts.git"
+    "url": "https://github.com/johnqh/heavymath_contracts.git"
   },
   "bugs": {
     "url": "https://github.com/heavymath/heavymath_contracts/issues"
@@ -135,9 +135,9 @@
   "peerDependencies": {
     "@solana/spl-token": ">=0.4.0",
     "@solana/web3.js": ">=1.95.0",
-    "@sudobility/configs": "^0.0.70",
-    "@sudobility/heavymath_types": "^0.0.14",
-    "@sudobility/types": "^1.9.59",
+    "@sudobility/configs": "^0.0.71",
+    "@sudobility/heavymath_types": "^0.0.15",
+    "@sudobility/types": "^1.9.60",
     "@tanstack/react-query": ">=5.0.0",
     "buffer": ">=6.0.0",
     "react": "^18.0.0 || ^19.0.0",
@@ -193,9 +193,9 @@
     "@solana/spl-token": "^0.4.14",
     "@solana/wallet-adapter-base": "^0.9.27",
     "@solana/web3.js": "^1.98.4",
-    "@sudobility/configs": "^0.0.70",
-    "@sudobility/heavymath_types": "^0.0.14",
-    "@sudobility/types": "^1.9.59",
+    "@sudobility/configs": "^0.0.71",
+    "@sudobility/heavymath_types": "^0.0.15",
+    "@sudobility/types": "^1.9.60",
     "@tanstack/react-query": "^5.90.1",
     "@typechain/ethers-v6": "^0.5.1",
     "@typechain/hardhat": "^9.1.0",
