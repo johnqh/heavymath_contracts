@@ -460,19 +460,6 @@ export const PREDICTION_MARKET_ABI = [
   },
   {
     inputs: [],
-    name: "GRACE_PERIOD",
-    outputs: [
-      {
-        internalType: "uint256",
-        name: "",
-        type: "uint256",
-      },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
     name: "dealerSharePercent",
     outputs: [
       {

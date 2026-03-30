@@ -38,9 +38,6 @@ contract PredictionMarket is
     /// @notice Minimum market duration (24 hours)
     uint256 public constant MIN_DURATION = 24 hours;
 
-    /// @notice Grace period for updating predictions (5 minutes)
-    uint256 public constant GRACE_PERIOD = 5 minutes;
-
     /// @notice Additional time after deadline before a market can be abandoned
     uint256 public constant RESOLUTION_GRACE_PERIOD = 24 hours;
 
@@ -327,10 +324,10 @@ contract PredictionMarket is
     }
 
     /**
-     * @notice Update a prediction within grace period
+     * @notice Update a prediction before the market deadline
      * @param marketId Market ID
      * @param newPercentage New predicted percentage (0-100)
-     * @param additionalAmount Additional amount to add (msg.value)
+     * @param additionalAmount Additional amount to add
      */
     function updatePrediction(
         uint256 marketId,
@@ -343,10 +340,6 @@ contract PredictionMarket is
 
         Prediction storage prediction = predictions[marketId][msg.sender];
         require(prediction.amount > 0, "No prediction");
-        require(
-            block.timestamp <= prediction.placedAt + GRACE_PERIOD,
-            "Grace period expired"
-        );
         require(newPercentage <= 100, "Invalid percentage");
 
         uint256 previousAmount = prediction.amount;

@@ -118,7 +118,6 @@ The package has multiple entry points for different environments:
 
 **Constants:**
 - `MIN_DURATION` = 24 hours (minimum market duration)
-- `GRACE_PERIOD` = 5 minutes (window to update a prediction after placing it)
 - `RESOLUTION_GRACE_PERIOD` = 24 hours (time after deadline before market can be abandoned)
 
 **Fee state variables (contract-level, owner-configurable):**
@@ -130,7 +129,7 @@ The package has multiple entry points for different environments:
 **Market lifecycle:**
 1. Dealer creates market (must own DealerNFT with valid permissions) -> status = `Active`
 2. Predictors place predictions with percentage (0-100) and USDC amount before deadline
-3. Predictors can update within 5-minute GRACE_PERIOD or withdraw before deadline
+3. Predictors can update or withdraw their predictions any time before the market deadline
 4. After deadline, resolution occurs via one of:
    - `resolveMarket()` - manual by dealer (only for non-oracle markets, oracleId == bytes32(0))
    - `resolveMarketWithOracle()` - anyone can call (for oracle-configured markets)
@@ -144,7 +143,7 @@ The package has multiple entry points for different environments:
 - `setWinnerFeeBps(feeBps)` - owner sets global winner fee (max 1000 = 10%)
 - `setDealerSharePercent(percent)` - owner sets dealer's share of fee (0-100%)
 - `placePrediction(marketId, percentage, amount)` - percentage 0-100, transfers ERC20 via SafeERC20
-- `updatePrediction(marketId, newPercentage, additionalAmount)` - within 5-min grace period only
+- `updatePrediction(marketId, newPercentage, additionalAmount)` - update prediction before deadline
 - `withdrawPrediction(marketId)` - full withdrawal before deadline
 - `resolveMarket(marketId, resolution)` - manual resolution by dealer (non-oracle markets only)
 - `resolveMarketWithOracle(marketId)` - automated oracle resolution (anyone can call)
@@ -268,7 +267,7 @@ const client = new EVMPredictionClient({
 | `setWinnerFeeBps(wallet, feeBps)` | Set global winner fee in basis points (owner) |
 | `setDealerSharePercent(wallet, percent)` | Set dealer's share of fee as percentage (owner) |
 | `placePrediction(wallet, marketId, percentage, amount)` | Place prediction (auto-approves ERC20, validates 0-100) |
-| `updatePrediction(wallet, marketId, newPercentage, additionalAmount)` | Update within grace period (auto-approves if additional amount) |
+| `updatePrediction(wallet, marketId, newPercentage, additionalAmount)` | Update prediction before deadline (auto-approves if additional amount) |
 | `withdrawPrediction(wallet, marketId)` | Withdraw prediction before deadline |
 | `cancelMarket(wallet, marketId)` | Cancel market (no predictions) |
 | `abandonMarket(wallet, marketId)` | Abandon unresolved market after grace |
