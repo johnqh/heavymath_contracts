@@ -198,6 +198,7 @@ contract OracleResolver is
      */
     function setPredictionMarket(address _predictionMarket) external onlyOwner {
         require(_predictionMarket != address(0), "Invalid address");
+        require(_predictionMarket.code.length > 0, "Address is not a contract");
         predictionMarket = _predictionMarket;
         emit PredictionMarketSet(_predictionMarket);
     }

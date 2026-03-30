@@ -167,6 +167,9 @@ export class EVMPredictionClient {
     percentage: number,
     amount: bigint
   ): Promise<TransactionResult> {
+    if (!Number.isInteger(percentage) || percentage < 0 || percentage > 100) {
+      throw new Error("percentage must be an integer between 0 and 100");
+    }
     await this.ensureAllowance(wallet, amount);
     return this.execute(wallet, "placePrediction", [
       marketId,
@@ -181,6 +184,9 @@ export class EVMPredictionClient {
     newPercentage: number,
     additionalAmount: bigint
   ): Promise<TransactionResult> {
+    if (!Number.isInteger(newPercentage) || newPercentage < 0 || newPercentage > 100) {
+      throw new Error("newPercentage must be an integer between 0 and 100");
+    }
     if (additionalAmount > 0n) {
       await this.ensureAllowance(wallet, additionalAmount);
     }

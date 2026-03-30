@@ -33,10 +33,6 @@
       "types": "./dist/unified/src/solana/index.d.ts",
       "default": "./dist/unified/src/solana/index.js"
     },
-    "./react": {
-      "types": "./dist/unified/src/react/index.d.ts",
-      "default": "./dist/unified/src/react/index.js"
-    },
     "./react-native": {
       "types": "./dist/react-native/src/react-native/index.d.ts",
       "default": "./dist/react-native/src/react-native/index.js"
@@ -44,7 +40,7 @@
   },
   "scripts": {
     "build": "bun run build:evm && bun run build:unified && bun run build:react-native",
-    "build:ci": "bun run build:unified && bun run build:react-native",
+    "build:ci": "bun run compile:evm && bun run build:unified && bun run build:react-native",
     "build:evm": "npx hardhat compile && tsc --project tsconfig.evm.json",
     "build:solana": "cargo build --manifest-path programs/prediction-market/Cargo.toml && tsc --project tsconfig.solana.json",
     "build:unified": "tsc --project tsconfig.unified.json",
@@ -129,7 +125,7 @@
     "LICENSE.md"
   ],
   "publishConfig": {
-    "access": "restricted",
+    "access": "public",
     "registry": "https://registry.npmjs.org"
   },
   "peerDependencies": {

@@ -47,7 +47,7 @@ Three UUPS-upgradeable Solidity 0.8.24 contracts:
 2. Users place predictions at a percentage (0-100) with USDC
 3. At deadline, equilibrium is calculated across the percentage spectrum
 4. Winners (on the correct side of equilibrium) share the losers' stakes proportionally
-5. Fees: dealer fee (0.1-2%) + system fee (10% of dealer fee)
+5. Fees: winner fee (default 1%, max 10%) split between dealer and platform (default 50/50)
 
 ## Development
 

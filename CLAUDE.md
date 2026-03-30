@@ -17,7 +17,7 @@ Multi-chain prediction market smart contracts for EVM chains (with planned Solan
 ```bash
 # Build
 bun run build                  # Build everything (evm compile + unified TS + react-native TS)
-bun run build:ci               # CI build (unified + react-native only, no hardhat compile)
+bun run build:ci               # CI build (compile EVM + unified + react-native)
 bun run build:evm              # Compile Solidity + build EVM TypeScript (tsconfig.evm.json)
 bun run build:unified          # Build unified TS client (tsconfig.unified.json)
 bun run build:react-native     # Build react-native TS client (tsconfig.react-native.json)
@@ -107,12 +107,11 @@ The package has multiple entry points for different environments:
 | `@sudobility/heavymath_contracts` | react-native | `dist/react-native/src/react-native/` |
 | `@sudobility/heavymath_contracts/evm` | any | `dist/unified/src/evm/` |
 | `@sudobility/heavymath_contracts/solana` | any | `dist/unified/src/solana/` (empty) |
-| `@sudobility/heavymath_contracts/react` | any | `dist/unified/src/react/` (empty) |
 | `@sudobility/heavymath_contracts/react-native` | any | `dist/react-native/src/react-native/` |
 
 ## Smart Contracts
 
-### PredictionMarket.sol (Core - 875 lines)
+### PredictionMarket.sol (Core - ~968 lines)
 
 **Inheritance chain:**
 `Initializable` -> `OwnableUpgradeable` -> `PausableUpgradeable` -> `UUPSUpgradeable` -> `ReentrancyGuardUpgradeable`
@@ -121,9 +120,10 @@ The package has multiple entry points for different environments:
 - `MIN_DURATION` = 24 hours (minimum market duration)
 - `GRACE_PERIOD` = 5 minutes (window to update a prediction after placing it)
 - `RESOLUTION_GRACE_PERIOD` = 24 hours (time after deadline before market can be abandoned)
-- `MIN_DEALER_FEE_BPS` = 10 (0.1%)
-- `MAX_DEALER_FEE_BPS` = 200 (2%)
-- `SYSTEM_FEE_PERCENT` = 10 (10% of dealer fee)
+
+**Fee state variables (contract-level, owner-configurable):**
+- `winnerFeeBps` = 100 (1% default, max 1000 = 10%) — fee on the distributable pool
+- `dealerSharePercent` = 50 (50% default) — dealer's share of the fee; remainder goes to platform
 
 **Market status enum:** `Active` (0), `Cancelled` (1), `Resolved` (2), `Abandoned` (3)
 
@@ -141,7 +141,8 @@ The package has multiple entry points for different environments:
 **All external/public functions:**
 - `initialize(dealerNFT, oracleResolver, stakeToken)` - proxy initializer
 - `createMarket(tokenId, category, subCategory, deadline, description, oracleId)` -> returns marketId
-- `setDealerFee(marketId, feeBps)` - dealer sets fee (10-200 bps), default is MIN (10 bps)
+- `setWinnerFeeBps(feeBps)` - owner sets global winner fee (max 1000 = 10%)
+- `setDealerSharePercent(percent)` - owner sets dealer's share of fee (0-100%)
 - `placePrediction(marketId, percentage, amount)` - percentage 0-100, transfers ERC20 via SafeERC20
 - `updatePrediction(marketId, newPercentage, additionalAmount)` - within 5-min grace period only
 - `withdrawPrediction(marketId)` - full withdrawal before deadline
@@ -159,9 +160,10 @@ The package has multiple entry points for different environments:
 - `getRefundAmount(marketId, predictor)` - view, returns refund amount
 - `calculatePayout(marketId, predictor)` - view, returns payout for a winner
 
-**Storage gap:** `uint256[50] private __gap` at end of contract for upgrade safety.
+**Storage gap:** `uint256[48] private __gap` at end of contract for upgrade safety.
 
 **State variables:**
+- `winnerFeeBps` (uint256), `dealerSharePercent` (uint256) — fee configuration
 - `dealerNFT` (DealerNFT), `oracleResolver` (OracleResolver), `stakeToken` (IERC20)
 - `marketCounter` (uint256)
 - `markets` (mapping uint256 => Market)
@@ -171,7 +173,7 @@ The package has multiple entry points for different environments:
 - `dealerFees`, `systemFees` (mapping uint256 => uint256)
 - `totalSystemFees` (uint256)
 
-### DealerNFT.sol (213 lines)
+### DealerNFT.sol (~283 lines)
 
 **Inheritance chain:**
 `Initializable` -> `ERC721Upgradeable` -> `ERC721EnumerableUpgradeable` -> `OwnableUpgradeable` -> `UUPSUpgradeable`
@@ -189,9 +191,9 @@ The package has multiple entry points for different environments:
 2. If specific category matches and has `subCategory=0xFF` -> allow all subcategories for that category
 3. If specific category matches and subCategory is in the array -> allow that specific combination
 
-**Storage gap:** `uint256[50] private __gap`
+**Storage gap:** `uint256[48] private __gap`
 
-### OracleResolver.sol (256 lines)
+### OracleResolver.sol (~273 lines)
 
 **Inheritance chain:**
 `Initializable` -> `OwnableUpgradeable` -> `UUPSUpgradeable`
@@ -200,7 +202,7 @@ The package has multiple entry points for different environments:
 - `registerOracle(oracleId, oracleType, dataSource, minValue, maxValue, stalePeriod)` - owner only
 - `updateOracleData(oracleId, value)` - authorized updaters or owner, CustomData type only
 - `getOracleData(oracleId)` -> (percentage, timestamp, isValid) - staleness check
-- `markResolved(oracleId)` - called by PredictionMarket after resolution (NOTE: no access control currently)
+- `markResolved(oracleId)` - called by PredictionMarket or owner after resolution (access-controlled via `predictionMarket` address)
 - `setAuthorizedUpdater(updater, authorized)` - owner only
 - `deactivateOracle(oracleId)` - owner only
 - Normalizes raw values to 0-100 percentage range: `(value - min) * 100 / (max - min)`
@@ -235,11 +237,12 @@ The prediction mechanism uses percentage-based odds (0-100), not binary bets.
 5. If outcome == equilibrium -> all refunded (no winners)
 6. Predictors at exact equilibrium point are always refunded regardless of outcome
 
-**Fee calculation** (in `calculatePayout`):
+**Fee calculation** (in `_calculateFees` / `calculatePayout`):
 - `distributablePool` = totalPool - equilibriumAmount (stakes at exact equilibrium excluded)
-- `dealerFee` = distributablePool * dealerFeeBps / 10000
-- `systemFee` = dealerFee * 10 / 100 (10% of dealer fee)
-- `winnerPool` = distributablePool - dealerFee - systemFee
+- `totalFee` = distributablePool * winnerFeeBps / 10000 (default 1%)
+- `dealerFee` = totalFee * dealerSharePercent / 100 (default 50% of totalFee)
+- `systemFee` = totalFee - dealerFee (remainder goes to platform)
+- `winnerPool` = distributablePool - totalFee
 - Each winner gets: `(their_bet / total_winning_bets) * winnerPool`
 
 ## TypeScript SDK
@@ -257,13 +260,14 @@ const client = new EVMPredictionClient({
 });
 ```
 
-**All methods (13 write + 2 read):**
+**All methods (14 write + 2 read):**
 
 | Method | Description |
 |---|---|
 | `createMarket(wallet, params)` | Create a new prediction market |
-| `setDealerFee(wallet, marketId, feeBps)` | Set dealer fee for a market |
-| `placePrediction(wallet, marketId, percentage, amount)` | Place prediction (auto-approves ERC20) |
+| `setWinnerFeeBps(wallet, feeBps)` | Set global winner fee in basis points (owner) |
+| `setDealerSharePercent(wallet, percent)` | Set dealer's share of fee as percentage (owner) |
+| `placePrediction(wallet, marketId, percentage, amount)` | Place prediction (auto-approves ERC20, validates 0-100) |
 | `updatePrediction(wallet, marketId, newPercentage, additionalAmount)` | Update within grace period (auto-approves if additional amount) |
 | `withdrawPrediction(wallet, marketId)` | Withdraw prediction before deadline |
 | `cancelMarket(wallet, marketId)` | Cancel market (no predictions) |
@@ -305,7 +309,7 @@ client.getEvmClient().placePrediction(...);
 
 ### React Hooks (src/react/)
 
-**Empty.** The `src/react/hooks/` directory exists but contains no files. The package.json export `./react` points to `dist/unified/src/react/index.d.ts` which does not exist yet.
+**Empty.** The `src/react/hooks/` directory exists but contains no files. No package.json export exists for `./react` (removed — will be added when hooks are implemented).
 
 ### React Native (src/react-native/)
 
@@ -441,8 +445,7 @@ Also exports:
 
 - The project uses **viem** (not ethers) for all contract interactions in the SDK and deployment scripts. The ethers dependency exists only for TypeChain type generation.
 - UUPS proxy deployment is manual (encodes `initialize` calldata and deploys `ERC1967Proxy`), not via `@openzeppelin/hardhat-upgrades` plugin.
-- All three contracts have `uint256[50] private __gap` storage gaps for upgrade safety.
+- All three contracts have storage gaps (`__gap`) for upgrade safety: PredictionMarket[48], DealerNFT[48], OracleResolver[50].
 - All three contracts disable initializers in their constructors (`_disableInitializers()`).
-- `OracleResolver.markResolved()` currently has no access control - it should be restricted to the PredictionMarket contract in production.
+- `OracleResolver.markResolved()` is access-controlled: only the PredictionMarket contract or owner can call it. The PredictionMarket address must be set via `setPredictionMarket()` after deployment.
 - `DEPLOYED.json` is currently empty (no networks deployed). The deploy script writes to it.
-- The `publishConfig` in package.json is set to `"access": "restricted"` despite the CI config setting npm-access to "public".

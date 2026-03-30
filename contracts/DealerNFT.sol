@@ -162,18 +162,13 @@ contract DealerNFT is
     ) external onlyOwner {
         require(_ownerOf(tokenId) != address(0), "Token does not exist");
 
+        // Check if category already tracked before overwriting
+        bool categoryExists = _permissions[tokenId][category].length > 0;
+
         // Store permissions
         _permissions[tokenId][category] = subCategories;
 
-        // Track that this category has been set
-        bool categoryExists = false;
-        uint256[] storage categories = _categoriesSet[tokenId];
-        for (uint256 i = 0; i < categories.length; i++) {
-            if (categories[i] == category) {
-                categoryExists = true;
-                break;
-            }
-        }
+        // Track that this category has been set (O(1) check via existing permissions)
         if (!categoryExists) {
             _categoriesSet[tokenId].push(category);
         }
@@ -282,8 +277,9 @@ contract DealerNFT is
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     /**
-     * @dev Storage gap for future upgrades
-     * Reduced from 50 to 48 after adding defaultPermissionCategory and defaultPermissionSubCategories
+     * @dev Storage gap for future upgrades.
+     * Reduced from 50 to 48 after adding defaultPermissionCategory (1 slot)
+     * and defaultPermissionSubCategories (1 slot for dynamic array base).
      */
     uint256[48] private __gap;
 }

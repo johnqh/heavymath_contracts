@@ -67,7 +67,7 @@ contract PredictionMarket is
         uint256 deadline; // Prediction deadline timestamp
         string description; // Market description
         uint256 createdAt; // Market creation timestamp
-        uint256 dealerFeeBps; // Deprecated: kept for storage layout compatibility
+        uint256 dealerFeeBps; // DEPRECATED: always 0. Kept for storage layout compatibility with deployed proxies. Fee model now uses contract-level winnerFeeBps + dealerSharePercent.
         MarketStatus status; // Market status
         uint256 resolution; // Resolved percentage (0-100)
         uint256 equilibrium; // Calculated equilibrium point (0-100)
@@ -271,7 +271,7 @@ contract PredictionMarket is
             deadline: deadline,
             description: description,
             createdAt: block.timestamp,
-            dealerFeeBps: 0, // Deprecated field, kept for storage layout
+            dealerFeeBps: 0, // DEPRECATED: see struct definition
             status: MarketStatus.Active,
             resolution: 0,
             equilibrium: 0,
