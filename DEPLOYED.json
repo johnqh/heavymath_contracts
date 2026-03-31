@@ -16,9 +16,9 @@
         "proxy": "0xa926f2087c7fa88542674fd75204d3c6e146d9d2"
       },
       "predictionMarket": {
-        "implementation": "0x1a6b05e57b430d29a6ab6cb9ca8f67c237de355a",
+        "implementation": "0x278bf6e69b921ce7e85f26df795573162348d2f0",
         "proxy": "0x409464d2e712ffc7e64baa191cac65c731581f05",
-        "upgradedAt": "2026-03-31T17:47:00.770Z"
+        "upgradedAt": "2026-03-31T21:28:15.862Z"
       }
     }
   }

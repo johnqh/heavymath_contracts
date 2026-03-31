@@ -91,9 +91,6 @@ contract PredictionMarket is
         uint256 overweightTotal; // total amount on overweight side before refund
     }
 
-    /// @notice When true, markets can be locked/resolved without waiting for the deadline
-    bool public testMode;
-
     /// @notice DealerNFT contract reference
     DealerNFT public dealerNFT;
 
@@ -1111,8 +1108,11 @@ contract PredictionMarket is
     /// @notice Whether a predictor has claimed their lock partial refund
     mapping(uint256 => mapping(address => bool)) public lockRefundClaimed;
 
+    /// @notice When true, markets can be locked/resolved without waiting for the deadline
+    bool public testMode;
+
     /**
-     * @dev Storage gap for future upgrades (reduced from 48 to 46)
+     * @dev Storage gap for future upgrades (reduced from 48 to 45)
      */
-    uint256[46] private __gap;
+    uint256[45] private __gap;
 }
