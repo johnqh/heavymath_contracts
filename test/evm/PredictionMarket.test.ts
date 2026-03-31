@@ -98,6 +98,7 @@ describe("PredictionMarket (USDC)", function () {
       const { market, dealer1, dealer2, predictor1, dealerNFT } = await openBalancedMarket();
 
       await advanceTime(86401);
+      await market.write.lockMarket([1n]);
 
       try {
         await market.write.resolveMarket([1n, 50n], { account: predictor1.account });
@@ -116,7 +117,7 @@ describe("PredictionMarket (USDC)", function () {
       expect(marketData[8]).to.equal(2); // resolved
     });
 
-    it("auto-cancels if only one side participated", async function () {
+    it("reverts locking one-sided market", async function () {
       const { market, dealer1, predictor1, publicClient } = await deployPredictionFixture();
       const block = await publicClient.getBlock();
       const deadline = block.timestamp + 86401n;
@@ -131,12 +132,14 @@ describe("PredictionMarket (USDC)", function () {
       });
 
       await advanceTime(86401);
-      await market.write.resolveMarket([1n, 10n], { account: dealer1.account });
 
-      const state = await market.read.markets([1n]);
-      expect(state[8]).to.equal(1); // cancelled
-      const refund = await market.read.getRefundAmount([1n, predictor1.account.address]);
-      expect(refund).to.equal(toUSDC("200"));
+      try {
+        await market.write.lockMarket([1n]);
+        expect.fail("Should have reverted");
+      } catch (error: any) {
+        // calculateEquilibrium returns 0 for one-sided, _lockWithEquilibrium reverts
+        expect(error.message).to.match(/No valid equilibrium|One-sided market/);
+      }
     });
 
     it("allows abandonment with refunds when dealer/oracle stalled", async function () {
@@ -178,6 +181,7 @@ describe("PredictionMarket (USDC)", function () {
       });
 
       await advanceTime(86401);
+      await market.write.lockMarket([1n]);
       await market.write.resolveMarket([1n, 70n], { account: dealer1.account });
 
       // winnerFeeBps=100 (1%), dealerSharePercent=50 (50/50 split)
@@ -219,9 +223,8 @@ describe("PredictionMarket (USDC)", function () {
       await advanceTime(86401);
 
       // Pre-computed equilibrium = 50 (same as what on-chain would compute)
-      await market.write.resolveMarketWithEquilibrium([1n, 70n, 50n], {
-        account: dealer1.account,
-      });
+      await market.write.lockMarketWithEquilibrium([1n, 50n]);
+      await market.write.resolveMarket([1n, 70n], { account: dealer1.account });
 
       const marketData = await market.read.markets([1n]);
       expect(marketData[8]).to.equal(2); // Resolved
@@ -256,25 +259,21 @@ describe("PredictionMarket (USDC)", function () {
       await advanceTime(86401);
 
       try {
-        await market.write.resolveMarketWithEquilibrium([1n, 50n, 0n], {
-          account: dealer1.account,
-        });
+        await market.write.lockMarketWithEquilibrium([1n, 0n]);
         expect.fail("Should have thrown for equilibrium=0");
       } catch (error: any) {
         expect(error.message).to.include("Invalid equilibrium");
       }
 
       try {
-        await market.write.resolveMarketWithEquilibrium([1n, 50n, 100n], {
-          account: dealer1.account,
-        });
+        await market.write.lockMarketWithEquilibrium([1n, 100n]);
         expect.fail("Should have thrown for equilibrium=100");
       } catch (error: any) {
         expect(error.message).to.include("Invalid equilibrium");
       }
     });
 
-    it("rejects non-dealer calling resolveMarketWithEquilibrium", async function () {
+    it("anyone can lock but only dealer can resolve", async function () {
       const { market, dealer1, predictor1, predictor2, publicClient } =
         await deployPredictionFixture();
       const block = await publicClient.getBlock();
@@ -294,8 +293,14 @@ describe("PredictionMarket (USDC)", function () {
 
       await advanceTime(86401);
 
+      // Anyone can lock (predictor1 locks here)
+      await market.write.lockMarketWithEquilibrium([1n, 50n], {
+        account: predictor1.account,
+      });
+
+      // But only dealer can resolve
       try {
-        await market.write.resolveMarketWithEquilibrium([1n, 50n, 50n], {
+        await market.write.resolveMarket([1n, 50n], {
           account: predictor1.account,
         });
         expect.fail("Should have thrown");
@@ -304,7 +309,7 @@ describe("PredictionMarket (USDC)", function () {
       }
     });
 
-    it("auto-cancels one-sided market with pre-computed equilibrium", async function () {
+    it("reverts locking one-sided market with pre-computed equilibrium", async function () {
       const { market, dealer1, predictor1, publicClient } =
         await deployPredictionFixture();
       const block = await publicClient.getBlock();
@@ -321,15 +326,12 @@ describe("PredictionMarket (USDC)", function () {
 
       await advanceTime(86401);
 
-      // Even with pre-computed equilibrium, _hasTwoSidedMarket check will cancel
-      await market.write.resolveMarketWithEquilibrium([1n, 10n, 50n], {
-        account: dealer1.account,
-      });
-
-      const state = await market.read.markets([1n]);
-      expect(state[8]).to.equal(1); // Cancelled
-      const refund = await market.read.getRefundAmount([1n, predictor1.account.address]);
-      expect(refund).to.equal(toUSDC("200"));
+      try {
+        await market.write.lockMarketWithEquilibrium([1n, 50n]);
+        expect.fail("Should have reverted");
+      } catch (error: any) {
+        expect(error.message).to.include("One-sided market");
+      }
     });
 
     it("validates oracle timestamps before resolving", async function () {
@@ -361,12 +363,19 @@ describe("PredictionMarket (USDC)", function () {
         account: predictor2.account,
       });
 
-      // Publish oracle data too early
+      // Publish oracle data too early (before deadline)
       await oracleResolver.write.updateOracleData([oracleId, 80n], {
         account: owner.account,
       });
 
       await advanceTime(86401);
+
+      // Lock market first (required before resolve)
+      await market.write.lockMarket([1n]);
+
+      let state = await market.read.markets([1n]);
+      expect(state[8]).to.equal(4); // Locked
+
       let reverted = false;
       try {
         await market.write.resolveMarketWithOracle([1n]);
@@ -376,17 +385,14 @@ describe("PredictionMarket (USDC)", function () {
       }
       expect(reverted).to.be.true;
 
-      let state = await market.read.markets([1n]);
-      expect(state[8]).to.equal(0); // still Active
-
-      // Publish fresh data
+      // Publish fresh data (after deadline, so timestamp is valid)
       await oracleResolver.write.updateOracleData([oracleId, 90n], {
         account: owner.account,
       });
 
       await market.write.resolveMarketWithOracle([1n]);
       state = await market.read.markets([1n]);
-      expect(state[8]).to.equal(2);
+      expect(state[8]).to.equal(2); // Resolved
     });
   });
 });

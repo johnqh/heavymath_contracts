@@ -1,22 +1,12 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "module": "ESNext",
-    "target": "ES2020",
-    "moduleResolution": "node10",
-    "ignoreDeprecations": "5.0",
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
     "strict": false,
     "noImplicitAny": false,
     "noImplicitThis": false,
     "noImplicitReturns": false,
     "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noEmit": true
+    "noUnusedParameters": false
   },
   "include": [
     "./src/**/*",

@@ -18,9 +18,13 @@ import "./OracleResolver.sol";
  *
  * Core Mechanism:
  * - Predictors specify a percentage (0-100) representing their desired odds
- * - System finds equilibrium point where total_below/total_above = percentage/(100-percentage)
- * - Predictions at exact equilibrium are auto-refunded
- * - Winners are those who predicted on the correct side of equilibrium
+ * - After the deadline, anyone can lock the market which calculates the equilibrium
+ * - Locking splits bettors into two sides (above/below equilibrium) and partially
+ *   refunds the overweight side pro-rata to achieve exact balance
+ * - Resolution (manual or oracle) then determines which side wins
+ *
+ * Market Lifecycle:
+ * Active -> Locked -> Resolved (or Cancelled/Abandoned at various stages)
  *
  * Fee Structure:
  * - A single fee (winnerFeeBps, default 1%) is charged on the winning side's distributable pool
@@ -52,7 +56,8 @@ contract PredictionMarket is
         Active,
         Cancelled,
         Resolved,
-        Abandoned
+        Abandoned,
+        Locked
     }
 
     /// @notice Market struct
@@ -77,6 +82,13 @@ contract PredictionMarket is
         uint256 percentage; // Predicted percentage (0-100)
         uint256 placedAt; // Timestamp when prediction was placed
         bool claimed; // Whether winnings have been claimed
+    }
+
+    /// @notice Lock refund info for partial refunds after locking
+    struct LockRefundInfo {
+        bool overweightIsBelow; // true = below side was overweight
+        uint256 excessAmount; // total excess to refund from overweight side
+        uint256 overweightTotal; // total amount on overweight side before refund
     }
 
     /// @notice DealerNFT contract reference
@@ -137,6 +149,8 @@ contract PredictionMarket is
         uint256 newPercentage
     );
 
+    event MarketLocked(uint256 indexed marketId, uint256 equilibrium);
+
     event MarketResolved(
         uint256 indexed marketId,
         uint256 resolution,
@@ -156,6 +170,12 @@ contract PredictionMarket is
     );
 
     event RefundClaimed(
+        uint256 indexed marketId,
+        address indexed predictor,
+        uint256 amount
+    );
+
+    event LockRefundClaimed(
         uint256 indexed marketId,
         address indexed predictor,
         uint256 amount
@@ -382,52 +402,124 @@ contract PredictionMarket is
 
         stakeToken.safeTransfer(msg.sender, amount);
     }
+
+    // ========== LOCK MARKET ==========
+
     /**
-     * @notice Resolve a market with the final result
+     * @notice Lock a market after the deadline. Calculates equilibrium, partially
+     * refunds the overweight side pro-rata, and converts to binary (above/below).
+     * @param marketId Market ID
+     * @dev Anyone can call this after the deadline.
+     */
+    function lockMarket(uint256 marketId) external nonReentrant {
+        Market storage market = markets[marketId];
+        require(market.status == MarketStatus.Active, "Market not active");
+        require(block.timestamp >= market.deadline, "Market still active");
+
+        uint256 equilibrium = calculateEquilibrium(marketId);
+
+        _lockWithEquilibrium(marketId, equilibrium);
+    }
+
+    /**
+     * @notice Lock a market with a pre-computed equilibrium (gas-optimized)
+     * @param marketId Market ID
+     * @param equilibrium Pre-computed equilibrium percentage (1-99)
+     */
+    function lockMarketWithEquilibrium(uint256 marketId, uint256 equilibrium) external nonReentrant {
+        Market storage market = markets[marketId];
+        require(market.status == MarketStatus.Active, "Market not active");
+        require(block.timestamp >= market.deadline, "Market still active");
+        require(equilibrium > 0 && equilibrium < 100, "Invalid equilibrium");
+
+        _lockWithEquilibrium(marketId, equilibrium);
+    }
+
+    /**
+     * @notice Claim partial refund from market locking (overweight side pro-rata)
+     * @param marketId Market ID
+     */
+    function claimLockRefund(uint256 marketId) external nonReentrant {
+        Market storage market = markets[marketId];
+        require(
+            market.status == MarketStatus.Locked ||
+            market.status == MarketStatus.Resolved,
+            "Market not locked or resolved"
+        );
+        require(!lockRefundClaimed[marketId][msg.sender], "Already claimed");
+
+        uint256 refund = getLockRefundAmount(marketId, msg.sender);
+        require(refund > 0, "No lock refund");
+
+        lockRefundClaimed[marketId][msg.sender] = true;
+        stakeToken.safeTransfer(msg.sender, refund);
+
+        emit LockRefundClaimed(marketId, msg.sender, refund);
+    }
+
+    /**
+     * @notice Get the partial lock refund amount for a predictor
+     * @param marketId Market ID
+     * @param predictor Predictor address
+     * @return Partial refund amount (0 if not eligible)
+     */
+    function getLockRefundAmount(uint256 marketId, address predictor) public view returns (uint256) {
+        Market storage market = markets[marketId];
+        if (market.status != MarketStatus.Locked && market.status != MarketStatus.Resolved) {
+            return 0;
+        }
+        if (lockRefundClaimed[marketId][predictor]) {
+            return 0;
+        }
+
+        Prediction storage prediction = predictions[marketId][predictor];
+        if (prediction.amount == 0) {
+            return 0;
+        }
+        // Equilibrium bettors get full refund via claimRefund, not lock refund
+        if (prediction.percentage == market.equilibrium) {
+            return 0;
+        }
+
+        LockRefundInfo storage lockInfo = lockRefunds[marketId];
+        if (lockInfo.excessAmount == 0) {
+            return 0;
+        }
+
+        bool predictorIsBelow = prediction.percentage < market.equilibrium;
+        if (predictorIsBelow == lockInfo.overweightIsBelow) {
+            return (prediction.amount * lockInfo.excessAmount) / lockInfo.overweightTotal;
+        }
+        return 0;
+    }
+
+    // ========== RESOLUTION ==========
+
+    /**
+     * @notice Resolve a locked market with the final result (dealer only, non-oracle)
      * @param marketId Market ID
      * @param resolution Final percentage result (0-100)
      */
     function resolveMarket(uint256 marketId, uint256 resolution) external {
         Market storage market = markets[marketId];
         require(dealerNFT.ownerOf(market.tokenId) == msg.sender, "Not dealer owner");
-        require(market.status == MarketStatus.Active, "Market not active");
-        require(block.timestamp >= market.deadline, "Market still active");
+        require(market.status == MarketStatus.Locked, "Market not locked");
         require(market.oracleId == bytes32(0), "Oracle controlled market");
         require(resolution <= 100, "Invalid resolution");
 
-        _finalizeResolution(marketId, resolution);
+        market.status = MarketStatus.Resolved;
+        market.resolution = resolution;
+
+        emit MarketResolved(marketId, resolution, market.equilibrium);
     }
 
     /**
-     * @notice Resolve a market with a pre-computed equilibrium (gas-optimized)
+     * @notice Resolve a locked market using oracle data (anyone can call)
      * @param marketId Market ID
-     * @param resolution Final percentage result (0-100)
-     * @param equilibrium Pre-computed equilibrium percentage (1-99)
-     * @dev Skips the expensive on-chain calculateEquilibrium() call.
-     *      The caller computes equilibrium off-chain and provides it here.
-     *      Validation is done via _hasTwoSidedMarket() which is cheap.
-     */
-    function resolveMarketWithEquilibrium(uint256 marketId, uint256 resolution, uint256 equilibrium) external {
-        Market storage market = markets[marketId];
-        require(dealerNFT.ownerOf(market.tokenId) == msg.sender, "Not dealer owner");
-        require(market.status == MarketStatus.Active, "Market not active");
-        require(block.timestamp >= market.deadline, "Market still active");
-        require(market.oracleId == bytes32(0), "Oracle controlled market");
-        require(resolution <= 100, "Invalid resolution");
-        require(equilibrium > 0 && equilibrium < 100, "Invalid equilibrium");
-
-        _finalizeResolutionWithEquilibrium(marketId, resolution, equilibrium);
-    }
-
-    /**
-     * @notice Resolve a market using oracle data
-     * @param marketId Market ID
-     * @dev Anyone can call this after deadline if market has oracle configured
      */
     function resolveMarketWithOracle(uint256 marketId) external {
         Market storage market = markets[marketId];
-        require(market.status == MarketStatus.Active, "Market not active");
-        require(block.timestamp >= market.deadline, "Market still active");
+        require(market.status == MarketStatus.Locked, "Market not locked");
         require(market.oracleId != bytes32(0), "No oracle configured");
 
         // Get oracle data
@@ -438,38 +530,16 @@ contract PredictionMarket is
         require(percentage <= 100, "Invalid oracle percentage");
         require(timestamp != 0 && timestamp >= market.deadline, "Oracle data too early");
 
-        _finalizeResolution(marketId, percentage);
+        market.status = MarketStatus.Resolved;
+        market.resolution = percentage;
 
-        // Mark oracle data as used (even if market became cancelled)
+        emit MarketResolved(marketId, percentage, market.equilibrium);
+
+        // Mark oracle data as used
         oracleResolver.markResolved(market.oracleId);
     }
 
-    /**
-     * @notice Resolve an oracle market with a pre-computed equilibrium (gas-optimized)
-     * @param marketId Market ID
-     * @param equilibrium Pre-computed equilibrium percentage (1-99)
-     * @dev Same as resolveMarketWithOracle but skips on-chain equilibrium calculation.
-     */
-    function resolveMarketWithOracleAndEquilibrium(uint256 marketId, uint256 equilibrium) external {
-        Market storage market = markets[marketId];
-        require(market.status == MarketStatus.Active, "Market not active");
-        require(block.timestamp >= market.deadline, "Market still active");
-        require(market.oracleId != bytes32(0), "No oracle configured");
-        require(equilibrium > 0 && equilibrium < 100, "Invalid equilibrium");
-
-        // Get oracle data
-        (uint256 percentage, uint256 timestamp, bool isValid) =
-            oracleResolver.getOracleData(market.oracleId);
-
-        require(isValid, "Oracle data stale");
-        require(percentage <= 100, "Invalid oracle percentage");
-        require(timestamp != 0 && timestamp >= market.deadline, "Oracle data too early");
-
-        _finalizeResolutionWithEquilibrium(marketId, percentage, equilibrium);
-
-        // Mark oracle data as used (even if market became cancelled)
-        oracleResolver.markResolved(market.oracleId);
-    }
+    // ========== CANCEL / ABANDON ==========
 
     /**
      * @notice Cancel a market before any predictions are placed
@@ -490,12 +560,16 @@ contract PredictionMarket is
     }
 
     /**
-     * @notice Mark market as abandoned when dealer/oracle fails to resolve
+     * @notice Mark market as abandoned when it isn't resolved in time
      * @param marketId Market ID
+     * @dev Can be called on Active or Locked markets after the grace period
      */
     function abandonMarket(uint256 marketId) external {
         Market storage market = markets[marketId];
-        require(market.status == MarketStatus.Active, "Market not active");
+        require(
+            market.status == MarketStatus.Active || market.status == MarketStatus.Locked,
+            "Market not active or locked"
+        );
         require(
             block.timestamp >= market.deadline + RESOLUTION_GRACE_PERIOD,
             "Resolution grace period active"
@@ -504,6 +578,8 @@ contract PredictionMarket is
         market.status = MarketStatus.Abandoned;
         emit MarketAbandoned(marketId);
     }
+
+    // ========== PAUSE ==========
 
     /**
      * @notice Pause the contract (owner only)
@@ -518,6 +594,8 @@ contract PredictionMarket is
     function unpause() external onlyOwner {
         _unpause();
     }
+
+    // ========== EQUILIBRIUM ==========
 
     /**
      * @notice Calculate equilibrium point for a market
@@ -546,12 +624,10 @@ contract PredictionMarket is
         }
 
         // Calculate cumulative above (sum of all percentages > current)
-        for (uint256 i = 0; i <= 100; i++) {
-            uint256 totalAbove = 0;
-            for (uint256 j = i + 1; j <= 100; j++) {
-                totalAbove += percentageTotalsArray[j];
-            }
-            cumulativeAbove[i] = totalAbove;
+        // O(n) reverse cumulative sum: cumulativeAbove[i] = cumulativeAbove[i+1] + totals[i+1]
+        cumulativeAbove[100] = 0;
+        for (uint256 i = 100; i > 0; i--) {
+            cumulativeAbove[i - 1] = cumulativeAbove[i] + percentageTotalsArray[i];
         }
 
         // Find equilibrium: where ratio matches percentage odds
@@ -594,83 +670,7 @@ contract PredictionMarket is
         return bestEquilibrium;
     }
 
-    /**
-     * @notice Determine if both sides of the market have liquidity
-     * @param marketId Market ID
-     * @param equilibrium Equilibrium percentage
-     * @return True if there are stakes on both sides of equilibrium
-     */
-    function _hasTwoSidedMarket(uint256 marketId, uint256 equilibrium) internal view returns (bool) {
-        bool hasBelow = false;
-        bool hasAbove = false;
-
-        if (equilibrium > 0) {
-            for (uint256 i = 0; i < equilibrium; i++) {
-                if (percentageTotals[marketId][i] > 0) {
-                    hasBelow = true;
-                    break;
-                }
-            }
-        }
-
-        if (equilibrium < 100) {
-            for (uint256 j = equilibrium + 1; j <= 100; j++) {
-                if (percentageTotals[marketId][j] > 0) {
-                    hasAbove = true;
-                    break;
-                }
-            }
-        }
-
-        return hasBelow && hasAbove;
-    }
-
-    /**
-     * @notice Internal helper to finalize market resolution or trigger refunds
-     * @param marketId Market ID
-     * @param resolution Final percentage result
-     */
-    function _finalizeResolution(uint256 marketId, uint256 resolution) internal {
-        Market storage market = markets[marketId];
-
-        uint256 equilibrium = calculateEquilibrium(marketId);
-        market.equilibrium = equilibrium;
-
-        if (!_hasTwoSidedMarket(marketId, equilibrium)) {
-            market.status = MarketStatus.Cancelled;
-            emit MarketCancelled(marketId);
-            return;
-        }
-
-        market.status = MarketStatus.Resolved;
-        market.resolution = resolution;
-
-        emit MarketResolved(marketId, resolution, equilibrium);
-    }
-
-    /**
-     * @notice Internal helper to finalize resolution with a pre-computed equilibrium
-     * @param marketId Market ID
-     * @param resolution Final percentage result
-     * @param equilibrium Pre-computed equilibrium percentage
-     * @dev Skips calculateEquilibrium(); only validates via _hasTwoSidedMarket()
-     */
-    function _finalizeResolutionWithEquilibrium(uint256 marketId, uint256 resolution, uint256 equilibrium) internal {
-        Market storage market = markets[marketId];
-
-        market.equilibrium = equilibrium;
-
-        if (!_hasTwoSidedMarket(marketId, equilibrium)) {
-            market.status = MarketStatus.Cancelled;
-            emit MarketCancelled(marketId);
-            return;
-        }
-
-        market.status = MarketStatus.Resolved;
-        market.resolution = resolution;
-
-        emit MarketResolved(marketId, resolution, equilibrium);
-    }
+    // ========== CLAIMS ==========
 
     /**
      * @notice Check if a predictor is a winner
@@ -733,110 +733,15 @@ contract PredictionMarket is
             return prediction.amount;
         }
 
-        if (market.status != MarketStatus.Resolved) {
-            return 0;
-        }
-
-        // Refund if predicted exactly at equilibrium
-        if (prediction.percentage == market.equilibrium) {
+        // Equilibrium bettors get full refund when market is locked or resolved
+        if (
+            (market.status == MarketStatus.Locked || market.status == MarketStatus.Resolved) &&
+            prediction.percentage == market.equilibrium
+        ) {
             return prediction.amount;
         }
 
         return 0;
-    }
-
-    /**
-     * @notice Calculate total winning bets for a market
-     * @param marketId Market ID
-     * @return Total amount on winning side
-     */
-    function _calculateTotalWinningBets(uint256 marketId)
-        internal
-        view
-        returns (uint256)
-    {
-        Market storage market = markets[marketId];
-        uint256 totalWinningBets = 0;
-        uint256 equilibrium = market.equilibrium;
-        uint256 resolution = market.resolution;
-
-        for (uint256 i = 0; i <= 100; i++) {
-            uint256 amount = percentageTotals[marketId][i];
-            if (amount > 0 && i != equilibrium) {
-                if (
-                    (resolution > equilibrium && i > equilibrium) ||
-                    (resolution < equilibrium && i < equilibrium)
-                ) {
-                    totalWinningBets += amount;
-                }
-            }
-        }
-
-        return totalWinningBets;
-    }
-
-    /**
-     * @notice Calculate fees for a market's distributable pool
-     * @param distributablePool The pool after removing equilibrium stakes
-     * @return totalFee Total fee amount
-     * @return dealerFee Dealer's share of the fee
-     * @return systemFee Platform's share of the fee
-     */
-    function _calculateFees(uint256 distributablePool)
-        internal
-        view
-        returns (uint256 totalFee, uint256 dealerFee, uint256 systemFee)
-    {
-        totalFee = (distributablePool * winnerFeeBps) / 10000;
-        dealerFee = (totalFee * dealerSharePercent) / 100;
-        systemFee = totalFee - dealerFee;
-    }
-
-    /**
-     * @notice Calculate payout for a winner
-     * @param marketId Market ID
-     * @param predictor Predictor address
-     * @return Payout amount
-     * @dev Calculates proportional share of winner pool after fees
-     */
-    function calculatePayout(uint256 marketId, address predictor)
-        public
-        view
-        returns (uint256)
-    {
-        Market storage market = markets[marketId];
-        if (market.status != MarketStatus.Resolved) {
-            return 0;
-        }
-
-        Prediction storage prediction = predictions[marketId][predictor];
-        if (prediction.amount == 0 || prediction.claimed) {
-            return 0;
-        }
-
-        // Check if winner
-        if (!isWinner(marketId, predictor)) {
-            return 0;
-        }
-
-        // Calculate fees
-        uint256 totalPool = marketPools[marketId];
-        uint256 equilibriumAmount = percentageTotals[marketId][market.equilibrium];
-        uint256 distributablePool = totalPool > equilibriumAmount ? totalPool - equilibriumAmount : 0;
-        (uint256 totalFee,,) = _calculateFees(distributablePool);
-
-        // Winner pool = distributable pool - total fees
-        uint256 winnerPool = distributablePool - totalFee;
-
-        // Get total winning bets
-        uint256 totalWinningBets = _calculateTotalWinningBets(marketId);
-
-        if (totalWinningBets == 0) {
-            return 0;
-        }
-
-        // Payout = (predictor_bet / total_winning_bets) * winner_pool
-        return (prediction.amount * winnerPool) / totalWinningBets;
     }
 
     /**
@@ -870,7 +775,7 @@ contract PredictionMarket is
     }
 
     /**
-     * @notice Claim refund for eligible predictions (equilibrium or cancellation flows)
+     * @notice Claim refund for eligible predictions (equilibrium, cancellation, or abandonment)
      * @param marketId Market ID
      */
     function claimRefund(uint256 marketId) external nonReentrant {
@@ -878,8 +783,9 @@ contract PredictionMarket is
         require(
             market.status == MarketStatus.Resolved ||
                 market.status == MarketStatus.Cancelled ||
-                market.status == MarketStatus.Abandoned,
-            "Market not finalized"
+                market.status == MarketStatus.Abandoned ||
+                market.status == MarketStatus.Locked,
+            "Market not finalized or locked"
         );
 
         Prediction storage prediction = predictions[marketId][msg.sender];
@@ -898,6 +804,8 @@ contract PredictionMarket is
         emit RefundClaimed(marketId, msg.sender, refundAmount);
     }
 
+    // ========== FEES ==========
+
     /**
      * @notice Withdraw dealer fees for a resolved market
      * @param marketId Market ID
@@ -910,9 +818,7 @@ contract PredictionMarket is
         uint256 feeAmount = dealerFees[marketId];
         if (feeAmount == 0) {
             // Calculate and store fees on first call
-            uint256 totalPool = marketPools[marketId];
-            uint256 equilibriumAmount = percentageTotals[marketId][market.equilibrium];
-            uint256 distributablePool = totalPool > equilibriumAmount ? totalPool - equilibriumAmount : 0;
+            uint256 distributablePool = _getDistributablePool(marketId);
             (, uint256 dealerFee, uint256 systemFee) = _calculateFees(distributablePool);
 
             feeAmount = dealerFee;
@@ -948,14 +854,255 @@ contract PredictionMarket is
         emit SystemFeesWithdrawn(msg.sender, amount);
     }
 
+    // ========== PAYOUT CALCULATION ==========
+
+    /**
+     * @notice Calculate payout for a winner
+     * @param marketId Market ID
+     * @param predictor Predictor address
+     * @return Payout amount
+     * @dev Uses effective amounts (after partial lock refunds) for proportional share
+     */
+    function calculatePayout(uint256 marketId, address predictor)
+        public
+        view
+        returns (uint256)
+    {
+        Market storage market = markets[marketId];
+        if (market.status != MarketStatus.Resolved) {
+            return 0;
+        }
+
+        Prediction storage prediction = predictions[marketId][predictor];
+        if (prediction.amount == 0 || prediction.claimed) {
+            return 0;
+        }
+
+        // Check if winner
+        if (!isWinner(marketId, predictor)) {
+            return 0;
+        }
+
+        // Calculate fees on distributable pool (after lock refunds + equilibrium removal)
+        uint256 distributablePool = _getDistributablePool(marketId);
+        (uint256 totalFee,,) = _calculateFees(distributablePool);
+
+        // Winner pool = distributable pool - total fees
+        uint256 winnerPool = distributablePool - totalFee;
+
+        // Get total winning bets (effective amounts)
+        uint256 totalWinningBets = _calculateTotalWinningBets(marketId);
+
+        if (totalWinningBets == 0) {
+            return 0;
+        }
+
+        // Use effective amount for this predictor
+        uint256 effectiveAmount = _getEffectiveAmount(marketId, prediction.amount, prediction.percentage);
+
+        // Payout = (effective_bet / total_winning_bets) * winner_pool
+        return (effectiveAmount * winnerPool) / totalWinningBets;
+    }
+
+    // ========== INTERNAL HELPERS ==========
+
+    /**
+     * @notice Internal lock implementation
+     * @param marketId Market ID
+     * @param equilibrium Equilibrium percentage
+     */
+    function _lockWithEquilibrium(uint256 marketId, uint256 equilibrium) internal {
+        Market storage market = markets[marketId];
+
+        require(equilibrium > 0 && equilibrium < 100, "No valid equilibrium");
+        require(_hasTwoSidedMarket(marketId, equilibrium), "One-sided market");
+
+        // Calculate below and above totals
+        uint256 below = _calculateSideTotal(marketId, equilibrium, true);
+        uint256 above = _calculateSideTotal(marketId, equilibrium, false);
+
+        uint256 leftSide = below * (100 - equilibrium);
+        uint256 rightSide = above * equilibrium;
+
+        LockRefundInfo storage lockInfo = lockRefunds[marketId];
+
+        if (leftSide > rightSide) {
+            // Below side is overweight
+            uint256 targetBelow = (above * equilibrium) / (100 - equilibrium);
+            uint256 excess = below - targetBelow;
+            lockInfo.overweightIsBelow = true;
+            lockInfo.excessAmount = excess;
+            lockInfo.overweightTotal = below;
+            marketPools[marketId] -= excess;
+        } else if (rightSide > leftSide) {
+            // Above side is overweight
+            uint256 targetAbove = (below * (100 - equilibrium)) / equilibrium;
+            uint256 excess = above - targetAbove;
+            lockInfo.overweightIsBelow = false;
+            lockInfo.excessAmount = excess;
+            lockInfo.overweightTotal = above;
+            marketPools[marketId] -= excess;
+        }
+        // If perfectly balanced, no partial refunds needed
+
+        market.equilibrium = equilibrium;
+        market.status = MarketStatus.Locked;
+
+        emit MarketLocked(marketId, equilibrium);
+    }
+
+    /**
+     * @notice Calculate total amount on one side of equilibrium
+     * @param marketId Market ID
+     * @param equilibrium Equilibrium percentage
+     * @param isBelow true for below side, false for above side
+     */
+    function _calculateSideTotal(uint256 marketId, uint256 equilibrium, bool isBelow) internal view returns (uint256) {
+        uint256 total = 0;
+        if (isBelow) {
+            for (uint256 i = 0; i < equilibrium; i++) {
+                total += percentageTotals[marketId][i];
+            }
+        } else {
+            for (uint256 i = equilibrium + 1; i <= 100; i++) {
+                total += percentageTotals[marketId][i];
+            }
+        }
+        return total;
+    }
+
+    /**
+     * @notice Determine if both sides of the market have liquidity
+     * @param marketId Market ID
+     * @param equilibrium Equilibrium percentage
+     * @return True if there are stakes on both sides of equilibrium
+     */
+    function _hasTwoSidedMarket(uint256 marketId, uint256 equilibrium) internal view returns (bool) {
+        bool hasBelow = false;
+        bool hasAbove = false;
+
+        if (equilibrium > 0) {
+            for (uint256 i = 0; i < equilibrium; i++) {
+                if (percentageTotals[marketId][i] > 0) {
+                    hasBelow = true;
+                    break;
+                }
+            }
+        }
+
+        if (equilibrium < 100) {
+            for (uint256 j = equilibrium + 1; j <= 100; j++) {
+                if (percentageTotals[marketId][j] > 0) {
+                    hasAbove = true;
+                    break;
+                }
+            }
+        }
+
+        return hasBelow && hasAbove;
+    }
+
+    /**
+     * @notice Get effective amount for a predictor after lock refunds
+     * @param marketId Market ID
+     * @param amount Original prediction amount
+     * @param percentage Predicted percentage
+     * @return Effective amount after partial refund
+     */
+    function _getEffectiveAmount(uint256 marketId, uint256 amount, uint256 percentage) internal view returns (uint256) {
+        Market storage market = markets[marketId];
+        LockRefundInfo storage lockInfo = lockRefunds[marketId];
+
+        if (lockInfo.excessAmount == 0) {
+            return amount;
+        }
+        if (percentage == market.equilibrium) {
+            return 0;
+        }
+
+        bool isBelow = percentage < market.equilibrium;
+        if (isBelow == lockInfo.overweightIsBelow) {
+            uint256 refund = (amount * lockInfo.excessAmount) / lockInfo.overweightTotal;
+            return amount - refund;
+        }
+        return amount;
+    }
+
+    /**
+     * @notice Calculate total winning bets using effective amounts
+     * @param marketId Market ID
+     * @return Total effective amount on winning side
+     */
+    function _calculateTotalWinningBets(uint256 marketId)
+        internal
+        view
+        returns (uint256)
+    {
+        Market storage market = markets[marketId];
+        uint256 totalWinningBets = 0;
+        uint256 equilibrium = market.equilibrium;
+        uint256 resolution = market.resolution;
+
+        for (uint256 i = 0; i <= 100; i++) {
+            uint256 amount = percentageTotals[marketId][i];
+            if (amount > 0 && i != equilibrium) {
+                if (
+                    (resolution > equilibrium && i > equilibrium) ||
+                    (resolution < equilibrium && i < equilibrium)
+                ) {
+                    totalWinningBets += _getEffectiveAmount(marketId, amount, i);
+                }
+            }
+        }
+
+        return totalWinningBets;
+    }
+
+    /**
+     * @notice Get distributable pool (total pool minus equilibrium stakes minus lock refund excess)
+     * @param marketId Market ID
+     * @return Distributable pool amount
+     */
+    function _getDistributablePool(uint256 marketId) internal view returns (uint256) {
+        Market storage market = markets[marketId];
+        uint256 pool = marketPools[marketId]; // Already has lock refund excess subtracted
+        uint256 equilibriumAmount = percentageTotals[marketId][market.equilibrium];
+        return pool > equilibriumAmount ? pool - equilibriumAmount : 0;
+    }
+
+    /**
+     * @notice Calculate fees for a market's distributable pool
+     * @param distributablePool The pool after removing equilibrium stakes
+     * @return totalFee Total fee amount
+     * @return dealerFee Dealer's share of the fee
+     * @return systemFee Platform's share of the fee
+     */
+    function _calculateFees(uint256 distributablePool)
+        internal
+        view
+        returns (uint256 totalFee, uint256 dealerFee, uint256 systemFee)
+    {
+        totalFee = (distributablePool * winnerFeeBps) / 10000;
+        dealerFee = (totalFee * dealerSharePercent) / 100;
+        systemFee = totalFee - dealerFee;
+    }
+
     /**
      * @notice Authorize upgrade (only owner can upgrade)
      * @dev Required by UUPSUpgradeable
      */
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
+    // ========== NEW STORAGE (consumes gap slots) ==========
+
+    /// @notice Lock refund info per market: marketId => LockRefundInfo
+    mapping(uint256 => LockRefundInfo) public lockRefunds;
+
+    /// @notice Whether a predictor has claimed their lock partial refund
+    mapping(uint256 => mapping(address => bool)) public lockRefundClaimed;
+
     /**
-     * @dev Storage gap for future upgrades
+     * @dev Storage gap for future upgrades (reduced from 48 to 46)
      */
-    uint256[48] private __gap;
+    uint256[46] private __gap;
 }

@@ -256,6 +256,50 @@ export const PREDICTION_MARKET_ABI = [
       {
         indexed: false,
         internalType: "uint256",
+        name: "equilibrium",
+        type: "uint256",
+      },
+    ],
+    name: "MarketLocked",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "marketId",
+        type: "uint256",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "predictor",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
+    ],
+    name: "LockRefundClaimed",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "marketId",
+        type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
         name: "resolution",
         type: "uint256",
       },
@@ -1048,9 +1092,17 @@ export const PREDICTION_MARKET_ABI = [
         name: "marketId",
         type: "uint256",
       },
+    ],
+    name: "lockMarket",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
       {
         internalType: "uint256",
-        name: "resolution",
+        name: "marketId",
         type: "uint256",
       },
       {
@@ -1059,9 +1111,99 @@ export const PREDICTION_MARKET_ABI = [
         type: "uint256",
       },
     ],
-    name: "resolveMarketWithEquilibrium",
+    name: "lockMarketWithEquilibrium",
     outputs: [],
     stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "marketId",
+        type: "uint256",
+      },
+    ],
+    name: "claimLockRefund",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "marketId",
+        type: "uint256",
+      },
+      {
+        internalType: "address",
+        name: "predictor",
+        type: "address",
+      },
+    ],
+    name: "getLockRefundAmount",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    name: "lockRefunds",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "overweightIsBelow",
+        type: "bool",
+      },
+      {
+        internalType: "uint256",
+        name: "excessAmount",
+        type: "uint256",
+      },
+      {
+        internalType: "uint256",
+        name: "overweightTotal",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+      {
+        internalType: "address",
+        name: "",
+        type: "address",
+      },
+    ],
+    name: "lockRefundClaimed",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
     type: "function",
   },
   {
@@ -1073,24 +1215,6 @@ export const PREDICTION_MARKET_ABI = [
       },
     ],
     name: "resolveMarketWithOracle",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [
-      {
-        internalType: "uint256",
-        name: "marketId",
-        type: "uint256",
-      },
-      {
-        internalType: "uint256",
-        name: "equilibrium",
-        type: "uint256",
-      },
-    ],
-    name: "resolveMarketWithOracleAndEquilibrium",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",

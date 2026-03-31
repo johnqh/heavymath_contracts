@@ -2,12 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "dist/unified",
-    "module": "ESNext",
-    "target": "ES2020",
-    "moduleResolution": "node10",
-    "ignoreDeprecations": "5.0",
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
+    "noEmit": false,
     "jsx": "react"
   },
   "include": [

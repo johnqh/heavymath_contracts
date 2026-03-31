@@ -1,6 +1,6 @@
 import type { Abi, Address, Chain, Hash, PublicClient, WalletClient } from "viem";
 import { erc20Abi, getAddress } from "viem";
-import { PREDICTION_MARKET_ABI as ABI } from "./prediction-market-abi";
+import { PREDICTION_MARKET_ABI as ABI } from "./prediction-market-abi.js";
 
 const PREDICTION_MARKET_ABI = ABI as Abi;
 
@@ -226,15 +226,20 @@ export class EVMPredictionClient {
     return this.execute(wallet, "resolveMarket", [marketId, resolution]);
   }
 
-  async resolveMarketWithEquilibrium(
+  async lockMarket(
+    wallet: WalletContext,
+    marketId: bigint
+  ): Promise<TransactionResult> {
+    return this.execute(wallet, "lockMarket", [marketId]);
+  }
+
+  async lockMarketWithEquilibrium(
     wallet: WalletContext,
     marketId: bigint,
-    resolution: bigint,
     equilibrium: bigint
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "resolveMarketWithEquilibrium", [
+    return this.execute(wallet, "lockMarketWithEquilibrium", [
       marketId,
-      resolution,
       equilibrium,
     ]);
   }
@@ -246,15 +251,24 @@ export class EVMPredictionClient {
     return this.execute(wallet, "resolveMarketWithOracle", [marketId]);
   }
 
-  async resolveMarketWithOracleAndEquilibrium(
+  async claimLockRefund(
     wallet: WalletContext,
-    marketId: bigint,
-    equilibrium: bigint
+    marketId: bigint
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "resolveMarketWithOracleAndEquilibrium", [
-      marketId,
-      equilibrium,
-    ]);
+    return this.execute(wallet, "claimLockRefund", [marketId]);
+  }
+
+  async getLockRefundAmount(
+    publicClient: PublicClient,
+    marketId: bigint,
+    predictor: Address
+  ): Promise<bigint> {
+    return (await publicClient.readContract({
+      address: this.predictionMarketAddress(),
+      abi: this.abi,
+      functionName: "getLockRefundAmount",
+      args: [marketId, predictor],
+    })) as bigint;
   }
 
   async claimWinnings(
