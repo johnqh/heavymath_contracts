@@ -101,7 +101,7 @@ describe("PredictionMarket (USDC)", function () {
       await market.write.lockMarket([1n]);
 
       try {
-        await market.write.resolveMarket([1n, 50n], { account: predictor1.account });
+        await market.write.resolveMarket([1n, true], { account: predictor1.account });
         expect.fail("Should have thrown");
       } catch (error: any) {
         expect(error.message).to.include("Not dealer owner");
@@ -112,7 +112,7 @@ describe("PredictionMarket (USDC)", function () {
         account: dealer1.account,
       });
 
-      await market.write.resolveMarket([1n, 60n], { account: dealer2.account });
+      await market.write.resolveMarket([1n, true], { account: dealer2.account });
       const marketData = await market.read.markets([1n]);
       expect(marketData[8]).to.equal(2); // resolved
     });
@@ -182,7 +182,7 @@ describe("PredictionMarket (USDC)", function () {
 
       await advanceTime(86401);
       await market.write.lockMarket([1n]);
-      await market.write.resolveMarket([1n, 70n], { account: dealer1.account });
+      await market.write.resolveMarket([1n, true], { account: dealer1.account });
 
       // winnerFeeBps=100 (1%), dealerSharePercent=50 (50/50 split)
       // distributablePool=200, totalFee=2, dealerFee=1, systemFee=1, winnerPool=198
@@ -224,7 +224,7 @@ describe("PredictionMarket (USDC)", function () {
 
       // Pre-computed equilibrium = 50 (same as what on-chain would compute)
       await market.write.lockMarketWithEquilibrium([1n, 50n]);
-      await market.write.resolveMarket([1n, 70n], { account: dealer1.account });
+      await market.write.resolveMarket([1n, true], { account: dealer1.account });
 
       const marketData = await market.read.markets([1n]);
       expect(marketData[8]).to.equal(2); // Resolved
@@ -300,7 +300,7 @@ describe("PredictionMarket (USDC)", function () {
 
       // But only dealer can resolve
       try {
-        await market.write.resolveMarket([1n, 50n], {
+        await market.write.resolveMarket([1n, true], {
           account: predictor1.account,
         });
         expect.fail("Should have thrown");

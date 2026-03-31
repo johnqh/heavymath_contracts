@@ -221,9 +221,9 @@ export class EVMPredictionClient {
   async resolveMarket(
     wallet: WalletContext,
     marketId: bigint,
-    resolution: bigint
+    positiveOutcome: boolean
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "resolveMarket", [marketId, resolution]);
+    return this.execute(wallet, "resolveMarket", [marketId, positiveOutcome]);
   }
 
   async lockMarket(
@@ -342,7 +342,7 @@ function formatMarket(raw: readonly unknown[]) {
     createdAt: BigInt(raw[6] as bigint),
     dealerFeeBps: BigInt(raw[7] as bigint),
     status: Number(raw[8] as number),
-    resolution: BigInt(raw[9] as bigint),
+    positiveOutcome: Boolean(raw[9]),
     equilibrium: BigInt(raw[10] as bigint),
     oracleId: raw[11] as `0x${string}`,
   };

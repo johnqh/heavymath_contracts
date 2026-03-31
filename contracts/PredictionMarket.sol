@@ -19,9 +19,9 @@ import "./OracleResolver.sol";
  * Core Mechanism:
  * - Predictors specify a percentage (0-100) representing their desired odds
  * - After the deadline, anyone can lock the market which calculates the equilibrium
- * - Locking splits bettors into two sides (above/below equilibrium) and partially
- *   refunds the overweight side pro-rata to achieve exact balance
- * - Resolution (manual or oracle) then determines which side wins
+ * - Locking splits bettors into two sides: positive (above equilibrium) and
+ *   negative (below equilibrium), partially refunding the overweight side pro-rata
+ * - Resolution is binary: the dealer or oracle decides which side (positive/negative) wins
  *
  * Market Lifecycle:
  * Active -> Locked -> Resolved (or Cancelled/Abandoned at various stages)
@@ -71,7 +71,7 @@ contract PredictionMarket is
         uint256 createdAt; // Market creation timestamp
         uint256 dealerFeeBps; // DEPRECATED: always 0. Kept for storage layout compatibility with deployed proxies. Fee model now uses contract-level winnerFeeBps + dealerSharePercent.
         MarketStatus status; // Market status
-        uint256 resolution; // Resolved percentage (0-100)
+        bool positiveOutcome; // Whether the positive (above equilibrium) side won
         uint256 equilibrium; // Calculated equilibrium point (0-100)
         bytes32 oracleId; // Optional oracle ID for automated resolution
     }
@@ -153,7 +153,7 @@ contract PredictionMarket is
 
     event MarketResolved(
         uint256 indexed marketId,
-        uint256 resolution,
+        bool positiveOutcome,
         uint256 equilibrium
     );
 
@@ -290,7 +290,7 @@ contract PredictionMarket is
             createdAt: block.timestamp,
             dealerFeeBps: 0, // DEPRECATED: see struct definition
             status: MarketStatus.Active,
-            resolution: 0,
+            positiveOutcome: false,
             equilibrium: 0,
             oracleId: oracleId
         });
@@ -496,26 +496,27 @@ contract PredictionMarket is
     // ========== RESOLUTION ==========
 
     /**
-     * @notice Resolve a locked market with the final result (dealer only, non-oracle)
+     * @notice Resolve a locked market with a binary outcome (dealer only, non-oracle)
      * @param marketId Market ID
-     * @param resolution Final percentage result (0-100)
+     * @param positiveOutcome true = positive (above equilibrium) side wins, false = negative (below) wins
      */
-    function resolveMarket(uint256 marketId, uint256 resolution) external {
+    function resolveMarket(uint256 marketId, bool positiveOutcome) external {
         Market storage market = markets[marketId];
         require(dealerNFT.ownerOf(market.tokenId) == msg.sender, "Not dealer owner");
         require(market.status == MarketStatus.Locked, "Market not locked");
         require(market.oracleId == bytes32(0), "Oracle controlled market");
-        require(resolution <= 100, "Invalid resolution");
 
         market.status = MarketStatus.Resolved;
-        market.resolution = resolution;
+        market.positiveOutcome = positiveOutcome;
 
-        emit MarketResolved(marketId, resolution, market.equilibrium);
+        emit MarketResolved(marketId, positiveOutcome, market.equilibrium);
     }
 
     /**
      * @notice Resolve a locked market using oracle data (anyone can call)
      * @param marketId Market ID
+     * @dev Oracle returns a percentage (0-100). If it is above the equilibrium,
+     *      the positive side wins; otherwise the negative side wins.
      */
     function resolveMarketWithOracle(uint256 marketId) external {
         Market storage market = markets[marketId];
@@ -530,10 +531,13 @@ contract PredictionMarket is
         require(percentage <= 100, "Invalid oracle percentage");
         require(timestamp != 0 && timestamp >= market.deadline, "Oracle data too early");
 
-        market.status = MarketStatus.Resolved;
-        market.resolution = percentage;
+        // Binary outcome: oracle value above equilibrium → positive side wins
+        bool positiveOutcome = percentage > market.equilibrium;
 
-        emit MarketResolved(marketId, percentage, market.equilibrium);
+        market.status = MarketStatus.Resolved;
+        market.positiveOutcome = positiveOutcome;
+
+        emit MarketResolved(marketId, positiveOutcome, market.equilibrium);
 
         // Mark oracle data as used
         oracleResolver.markResolved(market.oracleId);
@@ -677,7 +681,7 @@ contract PredictionMarket is
      * @param marketId Market ID
      * @param predictor Predictor address
      * @return True if predictor won
-     * @dev Winner = predicted on same side of equilibrium as actual result
+     * @dev Winner = predicted on the side that the binary resolution chose
      */
     function isWinner(uint256 marketId, address predictor) public view returns (bool) {
         Market storage market = markets[marketId];
@@ -691,25 +695,19 @@ contract PredictionMarket is
         Prediction storage prediction = predictions[marketId][predictor];
         require(prediction.amount > 0, "No prediction");
 
-        uint256 equilibrium = market.equilibrium;
-        uint256 resolution = market.resolution;
         uint256 predicted = prediction.percentage;
+        uint256 equilibrium = market.equilibrium;
 
-        // Auto-refund if predicted exactly at equilibrium
+        // Equilibrium bettors are always refunded, never winners
         if (predicted == equilibrium) {
             return false;
         }
 
-        // Winner if on same side as resolution
-        if (resolution > equilibrium) {
-            // Result is above equilibrium, winners predicted above equilibrium
+        // Binary resolution: positive side (above eq) or negative side (below eq)
+        if (market.positiveOutcome) {
             return predicted > equilibrium;
-        } else if (resolution < equilibrium) {
-            // Result is below equilibrium, winners predicted below equilibrium
-            return predicted < equilibrium;
         } else {
-            // Resolution exactly at equilibrium - no winners
-            return false;
+            return predicted < equilibrium;
         }
     }
 
@@ -1041,14 +1039,14 @@ contract PredictionMarket is
         Market storage market = markets[marketId];
         uint256 totalWinningBets = 0;
         uint256 equilibrium = market.equilibrium;
-        uint256 resolution = market.resolution;
+        bool positive = market.positiveOutcome;
 
         for (uint256 i = 0; i <= 100; i++) {
             uint256 amount = percentageTotals[marketId][i];
             if (amount > 0 && i != equilibrium) {
                 if (
-                    (resolution > equilibrium && i > equilibrium) ||
-                    (resolution < equilibrium && i < equilibrium)
+                    (positive && i > equilibrium) ||
+                    (!positive && i < equilibrium)
                 ) {
                     totalWinningBets += _getEffectiveAmount(marketId, amount, i);
                 }
