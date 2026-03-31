@@ -91,6 +91,9 @@ contract PredictionMarket is
         uint256 overweightTotal; // total amount on overweight side before refund
     }
 
+    /// @notice When true, markets can be locked/resolved without waiting for the deadline
+    bool public testMode;
+
     /// @notice DealerNFT contract reference
     DealerNFT public dealerNFT;
 
@@ -217,6 +220,15 @@ contract PredictionMarket is
 
         winnerFeeBps = 100; // 1%
         dealerSharePercent = 50; // 50/50 split
+        testMode = true;
+    }
+
+    /**
+     * @notice Enable or disable test mode (owner only)
+     * @param _testMode true to allow locking/resolving without waiting for deadline
+     */
+    function setTestMode(bool _testMode) external onlyOwner {
+        testMode = _testMode;
     }
 
     /**
@@ -414,7 +426,7 @@ contract PredictionMarket is
     function lockMarket(uint256 marketId) external nonReentrant {
         Market storage market = markets[marketId];
         require(market.status == MarketStatus.Active, "Market not active");
-        require(block.timestamp >= market.deadline, "Market still active");
+        require(testMode || block.timestamp >= market.deadline, "Market still active");
 
         uint256 equilibrium = calculateEquilibrium(marketId);
 
@@ -429,7 +441,7 @@ contract PredictionMarket is
     function lockMarketWithEquilibrium(uint256 marketId, uint256 equilibrium) external nonReentrant {
         Market storage market = markets[marketId];
         require(market.status == MarketStatus.Active, "Market not active");
-        require(block.timestamp >= market.deadline, "Market still active");
+        require(testMode || block.timestamp >= market.deadline, "Market still active");
         require(equilibrium > 0 && equilibrium < 100, "Invalid equilibrium");
 
         _lockWithEquilibrium(marketId, equilibrium);

@@ -1252,6 +1252,19 @@ export const PREDICTION_MARKET_ABI = [
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "bool",
+        "name": "_testMode",
+        "type": "bool"
+      }
+    ],
+    "name": "setTestMode",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "stakeToken",
     "outputs": [
@@ -1259,6 +1272,19 @@ export const PREDICTION_MARKET_ABI = [
         "internalType": "contract IERC20",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "testMode",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",

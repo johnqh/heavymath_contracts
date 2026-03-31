@@ -147,6 +147,13 @@ export class EVMPredictionClient {
     ]);
   }
 
+  async setTestMode(
+    wallet: WalletContext,
+    testMode: boolean
+  ): Promise<TransactionResult> {
+    return this.execute(wallet, "setTestMode", [testMode]);
+  }
+
   async setWinnerFeeBps(
     wallet: WalletContext,
     feeBps: bigint
