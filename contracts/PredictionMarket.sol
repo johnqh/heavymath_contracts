@@ -74,6 +74,7 @@ contract PredictionMarket is
         bool positiveOutcome; // Whether the positive (above equilibrium) side won
         uint256 equilibrium; // Calculated equilibrium point (0-100)
         bytes32 oracleId; // Optional oracle ID for automated resolution
+        bytes32 conditionData; // Encoded resolution condition (0x0 = legacy WinLoss)
     }
 
     /// @notice Prediction struct
@@ -132,7 +133,9 @@ contract PredictionMarket is
         uint256 category,
         uint256 subCategory,
         uint256 deadline,
-        string description
+        string description,
+        bytes32 oracleId,
+        bytes32 conditionData
     );
 
     event PredictionPlaced(
@@ -267,6 +270,43 @@ contract PredictionMarket is
         string calldata description,
         bytes32 oracleId
     ) external whenNotPaused returns (uint256) {
+        return _createMarket(tokenId, category, subCategory, deadline, description, oracleId, bytes32(0));
+    }
+
+    /**
+     * @notice Create a new prediction market with condition data
+     * @param tokenId Dealer NFT token ID
+     * @param category Market category
+     * @param subCategory Market subcategory
+     * @param deadline Prediction deadline (must be > 24h from now)
+     * @param description Market description
+     * @param oracleId Optional oracle ID for automated resolution (bytes32(0) for manual)
+     * @param conditionData Encoded resolution condition (bytes32(0) for legacy WinLoss)
+     */
+    function createMarketWithCondition(
+        uint256 tokenId,
+        uint256 category,
+        uint256 subCategory,
+        uint256 deadline,
+        string calldata description,
+        bytes32 oracleId,
+        bytes32 conditionData
+    ) external whenNotPaused returns (uint256) {
+        return _createMarket(tokenId, category, subCategory, deadline, description, oracleId, conditionData);
+    }
+
+    /**
+     * @dev Internal market creation logic
+     */
+    function _createMarket(
+        uint256 tokenId,
+        uint256 category,
+        uint256 subCategory,
+        uint256 deadline,
+        string calldata description,
+        bytes32 oracleId,
+        bytes32 conditionData
+    ) internal returns (uint256) {
         // Validate caller owns the dealer NFT
         require(
             dealerNFT.ownerOf(tokenId) == msg.sender,
@@ -301,7 +341,8 @@ contract PredictionMarket is
             status: MarketStatus.Active,
             positiveOutcome: false,
             equilibrium: 0,
-            oracleId: oracleId
+            oracleId: oracleId,
+            conditionData: conditionData
         });
 
         emit MarketCreated(
@@ -311,7 +352,9 @@ contract PredictionMarket is
             category,
             subCategory,
             deadline,
-            description
+            description,
+            oracleId,
+            conditionData
         );
 
         return marketId;
