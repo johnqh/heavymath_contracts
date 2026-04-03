@@ -526,6 +526,7 @@ contract PredictionMarket is
      * @param marketId Market ID
      * @dev Oracle returns a percentage (0-100). If it is above the equilibrium,
      *      the positive side wins; otherwise the negative side wins.
+     * @dev DEPRECATED: Use requestOracleResolution + completeOracleResolution for Chainlink flow
      */
     function resolveMarketWithOracle(uint256 marketId) external {
         Market storage market = markets[marketId];
@@ -541,6 +542,57 @@ contract PredictionMarket is
         require(timestamp != 0 && timestamp >= market.deadline, "Oracle data too early");
 
         // Binary outcome: oracle value above equilibrium → positive side wins
+        bool positiveOutcome = percentage > market.equilibrium;
+
+        market.status = MarketStatus.Resolved;
+        market.positiveOutcome = positiveOutcome;
+
+        emit MarketResolved(marketId, positiveOutcome, market.equilibrium);
+
+        // Mark oracle data as used
+        oracleResolver.markResolved(market.oracleId);
+    }
+
+    /**
+     * @notice Request oracle resolution via Chainlink Any API (step 1 of 2)
+     * @param marketId Market ID
+     * @dev Anyone can call. Sends a Chainlink request to the resolve API endpoint.
+     *      The API determines if the game has ended and returns the result (0 or 1).
+     *      After the Chainlink callback delivers the result, call completeOracleResolution().
+     */
+    function requestOracleResolution(uint256 marketId) external {
+        Market storage market = markets[marketId];
+        require(market.status == MarketStatus.Locked, "Market not locked");
+        require(market.oracleId != bytes32(0), "No oracle configured");
+        require(
+            !oracleResolver.pendingResolution(marketId),
+            "Resolution already pending"
+        );
+
+        oracleResolver.requestResolution(marketId, market.oracleId);
+    }
+
+    /**
+     * @notice Complete oracle resolution after Chainlink callback (step 2 of 2)
+     * @param marketId Market ID
+     * @dev Anyone can call after the Chainlink callback has delivered the result.
+     *      Reads the oracle result and resolves the market.
+     */
+    function completeOracleResolution(uint256 marketId) external {
+        Market storage market = markets[marketId];
+        require(market.status == MarketStatus.Locked, "Market not locked");
+        require(market.oracleId != bytes32(0), "No oracle configured");
+
+        // Read the result that Chainlink delivered to OracleResolver
+        (uint256 percentage, uint256 timestamp, bool isValid) =
+            oracleResolver.getOracleData(market.oracleId);
+
+        require(isValid, "Oracle data not available");
+        require(timestamp != 0, "No oracle data");
+
+        // percentage is 0 or 100 (from Chainlink result 0 or 1)
+        // 100 > any equilibrium → positive wins
+        // 0 < any equilibrium → negative wins
         bool positiveOutcome = percentage > market.equilibrium;
 
         market.status = MarketStatus.Resolved;

@@ -60,6 +60,32 @@ async function main() {
   await oracleResolver.write.setPredictionMarket([predictionProxy.address]);
   console.log('🔗 OracleResolver.setPredictionMarket set to PredictionMarket');
 
+  // Configure Chainlink Any API (if env vars are set)
+  const linkToken = process.env.LINK_TOKEN_ADDRESS;
+  const chainlinkOracle = process.env.CHAINLINK_ORACLE_ADDRESS;
+  const chainlinkJobId = process.env.CHAINLINK_JOB_ID;
+  const chainlinkFee = process.env.CHAINLINK_FEE;
+  const apiBaseUrl = process.env.CHAINLINK_API_BASE_URL;
+
+  if (linkToken && chainlinkOracle && chainlinkJobId && chainlinkFee && apiBaseUrl) {
+    await oracleResolver.write.setChainlinkConfig([
+      linkToken as `0x${string}`,
+      chainlinkOracle as `0x${string}`,
+      chainlinkJobId as `0x${string}`,
+      BigInt(chainlinkFee),
+      apiBaseUrl,
+    ]);
+    console.log('🔗 OracleResolver Chainlink config set');
+    console.log('   LINK token:', linkToken);
+    console.log('   Oracle:', chainlinkOracle);
+    console.log('   Job ID:', chainlinkJobId);
+    console.log('   Fee:', chainlinkFee);
+    console.log('   API base URL:', apiBaseUrl);
+  } else {
+    console.log('⚠️ Chainlink env vars not fully set, skipping Chainlink config');
+    console.log('   Set LINK_TOKEN_ADDRESS, CHAINLINK_ORACLE_ADDRESS, CHAINLINK_JOB_ID, CHAINLINK_FEE, CHAINLINK_API_BASE_URL to configure');
+  }
+
   const newOwner = ownerMultisig ?? deployer.account.address;
   if (ownerMultisig) {
     console.log('🔑 Transferring ownership to', ownerMultisig);

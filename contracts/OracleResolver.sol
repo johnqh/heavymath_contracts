@@ -4,27 +4,32 @@ pragma solidity ^0.8.24;
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@chainlink/contracts/src/v0.8/operatorforwarder/ChainlinkClient.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
 /**
  * @title OracleResolver
  * @notice Handles oracle-based resolution for prediction markets
- * @dev UUPS upgradeable contract that integrates with Chainlink and other oracles
+ * @dev UUPS upgradeable contract that integrates with Chainlink Any API
  *
  * Supported Oracle Types:
  * 1. Chainlink Price Feeds - For price-based markets
  * 2. Manual Oracle - For custom data sources (sports, weather, etc.)
- * 3. Chainlink Any API - For external API data (future)
+ * 3. Chainlink Any API - For external API data (sports game outcomes)
  *
- * Resolution Process:
- * - Oracle data is converted to 0-100 percentage range
- * - Data must be validated and within acceptable bounds
- * - Stale data protection with configurable timeouts
+ * Resolution Process (Chainlink Any API):
+ * 1. requestResolution(marketId) sends a Chainlink request to the API
+ * 2. Chainlink node calls the API endpoint and extracts the result
+ * 3. fulfillResolution callback receives the result (0 or 1) and stores it
+ * 4. PredictionMarket reads the result and resolves the market
  */
 contract OracleResolver is
     Initializable,
     OwnableUpgradeable,
-    UUPSUpgradeable
+    UUPSUpgradeable,
+    ChainlinkClient
 {
+    using Chainlink for Chainlink.Request;
     /// @notice Oracle type enum
     enum OracleType {
         Manual,        // No oracle, manual resolution only
@@ -62,7 +67,34 @@ contract OracleResolver is
     /// @notice Address of the PredictionMarket contract (authorized to call markResolved)
     address public predictionMarket;
 
-    /// @notice Events
+    // ========== Chainlink Any API Configuration ==========
+
+    /// @notice Chainlink oracle node address
+    address public chainlinkOracle;
+
+    /// @notice Chainlink job ID for HTTP GET → uint256
+    bytes32 public chainlinkJobId;
+
+    /// @notice LINK fee per Chainlink request
+    uint256 public chainlinkFee;
+
+    /// @notice Base URL for the resolve API endpoint (e.g., "https://api.heavymath.io/api/markets/")
+    string public apiBaseUrl;
+
+    /// @notice Mapping: Chainlink requestId → on-chain marketId
+    mapping(bytes32 => uint256) public requestToMarketId;
+
+    /// @notice Mapping: Chainlink requestId → chainId (for URL construction)
+    mapping(bytes32 => uint256) public requestToChainId;
+
+    /// @notice Mapping: Chainlink requestId → oracleId (to store result in latestData)
+    mapping(bytes32 => bytes32) public requestToOracleId;
+
+    /// @notice Mapping: marketId → has a pending Chainlink request
+    mapping(uint256 => bool) public pendingResolution;
+
+    // ========== Events ==========
+
     event OracleRegistered(
         bytes32 indexed oracleId,
         OracleType oracleType,
@@ -80,6 +112,25 @@ contract OracleResolver is
 
     event UpdaterAuthorized(address indexed updater, bool authorized);
     event PredictionMarketSet(address indexed predictionMarket);
+
+    event ResolutionRequested(
+        uint256 indexed marketId,
+        bytes32 indexed requestId,
+        bytes32 oracleId
+    );
+
+    event ResolutionFulfilled(
+        uint256 indexed marketId,
+        bytes32 indexed requestId,
+        uint256 result
+    );
+
+    event ChainlinkConfigUpdated(
+        address oracle,
+        bytes32 jobId,
+        uint256 fee,
+        string apiBaseUrl
+    );
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -256,6 +307,124 @@ contract OracleResolver is
         return ((value - minValue) * 100) / (maxValue - minValue);
     }
 
+    // ========== Chainlink Any API Functions ==========
+
+    /**
+     * @notice Configure Chainlink Any API parameters
+     * @param _linkToken Address of the LINK token contract
+     * @param _oracle Address of the Chainlink oracle node
+     * @param _jobId Job ID for HTTP GET → uint256
+     * @param _fee LINK fee per request (in wei)
+     * @param _apiBaseUrl Base URL for the resolve endpoint (e.g., "https://api.heavymath.io/api/markets/")
+     */
+    function setChainlinkConfig(
+        address _linkToken,
+        address _oracle,
+        bytes32 _jobId,
+        uint256 _fee,
+        string calldata _apiBaseUrl
+    ) external onlyOwner {
+        require(_linkToken != address(0), "Invalid LINK token");
+        require(_oracle != address(0), "Invalid oracle");
+
+        _setChainlinkToken(_linkToken);
+        chainlinkOracle = _oracle;
+        chainlinkJobId = _jobId;
+        chainlinkFee = _fee;
+        apiBaseUrl = _apiBaseUrl;
+
+        emit ChainlinkConfigUpdated(_oracle, _jobId, _fee, _apiBaseUrl);
+    }
+
+    /**
+     * @notice Request oracle resolution via Chainlink Any API
+     * @param marketId The on-chain market ID
+     * @param oracleId The market's oracleId (used to store the result)
+     * @return requestId The Chainlink request ID
+     * @dev Called by PredictionMarket.requestOracleResolution()
+     */
+    function requestResolution(
+        uint256 marketId,
+        bytes32 oracleId
+    ) external returns (bytes32) {
+        require(
+            msg.sender == predictionMarket || msg.sender == owner(),
+            "Not authorized"
+        );
+        require(!pendingResolution[marketId], "Resolution already pending");
+        require(chainlinkOracle != address(0), "Chainlink not configured");
+
+        Chainlink.Request memory req = _buildChainlinkRequest(
+            chainlinkJobId,
+            address(this),
+            this.fulfillResolution.selector
+        );
+
+        // Build URL: {apiBaseUrl}{chainId}-{marketId}/resolve
+        string memory url = string(
+            abi.encodePacked(
+                apiBaseUrl,
+                Strings.toString(block.chainid),
+                "-",
+                Strings.toString(marketId),
+                "/resolve"
+            )
+        );
+
+        req._add("get", url);
+        req._add("path", "result");
+        req._addInt("times", 1);
+
+        bytes32 requestId = _sendChainlinkRequestTo(chainlinkOracle, req, chainlinkFee);
+
+        requestToMarketId[requestId] = marketId;
+        requestToChainId[requestId] = block.chainid;
+        requestToOracleId[requestId] = oracleId;
+        pendingResolution[marketId] = true;
+
+        emit ResolutionRequested(marketId, requestId, oracleId);
+
+        return requestId;
+    }
+
+    /**
+     * @notice Chainlink callback - called by oracle with the API result
+     * @param requestId The Chainlink request ID
+     * @param result The extracted result from the API (0 = negative, 1 = positive)
+     */
+    function fulfillResolution(
+        bytes32 requestId,
+        uint256 result
+    ) public recordChainlinkFulfillment(requestId) {
+        uint256 marketId = requestToMarketId[requestId];
+        bytes32 oracleId = requestToOracleId[requestId];
+        require(marketId != 0, "Unknown request");
+        require(result <= 1, "Invalid result");
+
+        pendingResolution[marketId] = false;
+
+        // Store result in latestData so PredictionMarket can read it
+        // result=1 → percentage=100 (positive), result=0 → percentage=0 (negative)
+        latestData[oracleId] = OracleData({
+            value: result,
+            percentage: result * 100,
+            timestamp: block.timestamp,
+            isResolved: false
+        });
+
+        emit ResolutionFulfilled(marketId, requestId, result);
+    }
+
+    /**
+     * @notice Withdraw LINK tokens from the contract (owner only)
+     * @param to Address to send LINK tokens to
+     * @param amount Amount of LINK to withdraw
+     */
+    function withdrawLink(address to, uint256 amount) external onlyOwner {
+        LinkTokenInterface link = LinkTokenInterface(_chainlinkTokenAddress());
+        require(link.transfer(to, amount), "LINK transfer failed");
+    }
+
     /**
      * @notice Authorize upgrade (only owner can upgrade)
      * @dev Required by UUPSUpgradeable
@@ -267,7 +436,7 @@ contract OracleResolver is
     {}
 
     /**
-     * @dev Storage gap for future upgrades
+     * @dev Storage gap for future upgrades (reduced from 50 to account for new storage vars)
      */
-    uint256[50] private __gap;
+    uint256[42] private __gap;
 }

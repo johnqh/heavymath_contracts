@@ -258,6 +258,29 @@ export class EVMPredictionClient {
     return this.execute(wallet, "resolveMarketWithOracle", [marketId]);
   }
 
+  /**
+   * Request oracle resolution via Chainlink (step 1 of 2).
+   * Sends a Chainlink request to fetch the game result from the API.
+   * After the Chainlink callback delivers the result, call completeOracleResolution().
+   */
+  async requestOracleResolution(
+    wallet: WalletContext,
+    marketId: bigint
+  ): Promise<TransactionResult> {
+    return this.execute(wallet, "requestOracleResolution", [marketId]);
+  }
+
+  /**
+   * Complete oracle resolution after Chainlink callback (step 2 of 2).
+   * Reads the oracle result and resolves the market.
+   */
+  async completeOracleResolution(
+    wallet: WalletContext,
+    marketId: bigint
+  ): Promise<TransactionResult> {
+    return this.execute(wallet, "completeOracleResolution", [marketId]);
+  }
+
   async claimLockRefund(
     wallet: WalletContext,
     marketId: bigint
