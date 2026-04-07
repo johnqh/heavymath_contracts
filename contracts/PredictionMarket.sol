@@ -90,6 +90,7 @@ contract PredictionMarket is
         bool overweightIsBelow; // true = below side was overweight
         uint256 excessAmount; // total excess to refund from overweight side
         uint256 overweightTotal; // total amount on overweight side before refund
+        bool isExactEquilibrium; // true = equilibrium is exactly at a percentage (bets at eq refunded); false = gap between eq and eq+1
     }
 
     /// @notice DealerNFT contract reference
@@ -468,9 +469,9 @@ contract PredictionMarket is
         require(market.status == MarketStatus.Active, "Market not active");
         require(testMode || block.timestamp >= market.deadline, "Market still active");
 
-        uint256 equilibrium = calculateEquilibrium(marketId);
+        (uint256 equilibrium, bool isExact) = calculateEquilibriumDetailed(marketId);
 
-        _lockWithEquilibrium(marketId, equilibrium);
+        _lockWithEquilibrium(marketId, equilibrium, isExact);
     }
 
     /**
@@ -484,7 +485,12 @@ contract PredictionMarket is
         require(testMode || block.timestamp >= market.deadline, "Market still active");
         require(equilibrium > 0 && equilibrium < 100, "Invalid equilibrium");
 
-        _lockWithEquilibrium(marketId, equilibrium);
+        // Determine if this is an exact or gap equilibrium
+        bool isExact = percentageTotals[marketId][equilibrium] > 0 &&
+            _calculateSideTotal(marketId, equilibrium, true, true) > 0 &&
+            _calculateSideTotal(marketId, equilibrium, false, true) > 0;
+
+        _lockWithEquilibrium(marketId, equilibrium, isExact);
     }
 
     /**
@@ -528,17 +534,22 @@ contract PredictionMarket is
         if (prediction.amount == 0) {
             return 0;
         }
-        // Equilibrium bettors get full refund via claimRefund, not lock refund
-        if (prediction.percentage == market.equilibrium) {
+        LockRefundInfo storage lockInfo = lockRefunds[marketId];
+
+        // Exact equilibrium bettors get full refund via claimRefund, not lock refund
+        if (lockInfo.isExactEquilibrium && prediction.percentage == market.equilibrium) {
             return 0;
         }
 
-        LockRefundInfo storage lockInfo = lockRefunds[marketId];
         if (lockInfo.excessAmount == 0) {
             return 0;
         }
 
-        bool predictorIsBelow = prediction.percentage < market.equilibrium;
+        // Gap: neg = predicted <= eq, pos = predicted > eq
+        // Exact: neg = predicted < eq, pos = predicted > eq
+        bool predictorIsBelow = lockInfo.isExactEquilibrium
+            ? prediction.percentage < market.equilibrium
+            : prediction.percentage <= market.equilibrium;
         if (predictorIsBelow == lockInfo.overweightIsBelow) {
             return (prediction.amount * lockInfo.excessAmount) / lockInfo.overweightTotal;
         }
@@ -706,76 +717,95 @@ contract PredictionMarket is
     // ========== EQUILIBRIUM ==========
 
     /**
-     * @notice Calculate equilibrium point for a market
+     * @notice Calculate equilibrium point for a market (returns percentage only)
      * @param marketId Market ID
-     * @return Equilibrium percentage (0-100)
-     * @dev O(101) algorithm: finds point where total_below/total_above = percentage/(100-percentage)
+     * @return Equilibrium percentage (1-99)
      */
     function calculateEquilibrium(uint256 marketId) public view returns (uint256) {
-        // Build cumulative totals for each percentage point
-        uint256[101] memory cumulativeBelow;
-        uint256[101] memory cumulativeAbove;
+        (uint256 eq, ) = calculateEquilibriumDetailed(marketId);
+        return eq;
+    }
 
-        // First, get total for each percentage
-        uint256[101] memory percentageTotalsArray;
+    /**
+     * @notice Calculate equilibrium with exact/gap flag
+     * @param marketId Market ID
+     * @return equilibrium The equilibrium percentage
+     * @return isExact True if exact (bets at eq refunded), false if gap (eq is Pneg)
+     */
+    function calculateEquilibriumDetailed(uint256 marketId) public view returns (uint256, bool) {
+        // Build cumulative sums: cumBelow[p] = sum of percentageTotals[0..p] (inclusive)
+        uint256[101] memory totals;
+        uint256[101] memory cumBelow; // cumBelow[p] = sum(0..p)
         for (uint256 i = 0; i <= 100; i++) {
-            percentageTotalsArray[i] = percentageTotals[marketId][i];
+            totals[i] = percentageTotals[marketId][i];
+            cumBelow[i] = (i == 0) ? totals[0] : cumBelow[i - 1] + totals[i];
         }
+        uint256 totalAll = cumBelow[100];
 
-        // Calculate cumulative below (sum of all percentages < current)
-        for (uint256 i = 0; i <= 100; i++) {
-            if (i == 0) {
-                cumulativeBelow[i] = 0;
-            } else {
-                cumulativeBelow[i] = cumulativeBelow[i - 1] + percentageTotalsArray[i - 1];
+        // --- Check GAP equilibria: equilibrium between g% and (g+1)% ---
+        // Negative side = sum(0..g), positive side = sum(g+1..100)
+        // Balance: (g+1) * sum_pos == g * sum_neg  (from Ppos/Pneg = sum_neg/sum_pos)
+        uint256 bestGap = 0;
+        uint256 bestGapDiff = type(uint256).max;
+        bool foundGap = false;
+
+        for (uint256 g = 1; g < 100; g++) {
+            uint256 sumNeg = cumBelow[g];
+            uint256 sumPos = totalAll - sumNeg;
+
+            if (sumNeg == 0 || sumPos == 0) continue;
+
+            // Balance: (g+1) * sumPos vs g * sumNeg
+            uint256 left = (g + 1) * sumPos;
+            uint256 right = g * sumNeg;
+            uint256 diff = left > right ? left - right : right - left;
+
+            if (diff < bestGapDiff) {
+                bestGapDiff = diff;
+                bestGap = g;
+                foundGap = true;
             }
         }
 
-        // Calculate cumulative above (sum of all percentages > current)
-        // O(n) reverse cumulative sum: cumulativeAbove[i] = cumulativeAbove[i+1] + totals[i+1]
-        cumulativeAbove[100] = 0;
-        for (uint256 i = 100; i > 0; i--) {
-            cumulativeAbove[i - 1] = cumulativeAbove[i] + percentageTotalsArray[i];
-        }
+        // --- Check EXACT equilibria: equilibrium exactly at p% ---
+        // Bets at p are removed. Neg = sum(0..p-1), pos = sum(p+1..100)
+        // Balance: (p+1) * sum_pos == (p-1) * sum_neg
+        uint256 bestExact = 0;
+        uint256 bestExactDiff = type(uint256).max;
+        bool foundExact = false;
 
-        // Find equilibrium: where ratio matches percentage odds
-        // We want: total_below / total_above ≈ percentage / (100 - percentage)
-        // Or: total_below * (100 - percentage) ≈ total_above * percentage
+        for (uint256 p = 2; p < 100; p++) {
+            if (totals[p] == 0) continue; // Only relevant if there are bets at p
 
-        uint256 bestEquilibrium = 0;
-        uint256 bestDifference = type(uint256).max;
+            uint256 sumNeg = cumBelow[p - 1]; // sum(0..p-1)
+            uint256 sumPos = totalAll - cumBelow[p]; // sum(p+1..100)
 
-        for (uint256 p = 1; p < 100; p++) {
-            uint256 below = cumulativeBelow[p];
-            uint256 above = cumulativeAbove[p];
+            if (sumNeg == 0 || sumPos == 0) continue;
 
-            // Skip if both sides are zero (no predictions)
-            if (below == 0 && above == 0) {
-                continue;
-            }
+            uint256 left = (p + 1) * sumPos;
+            uint256 right = (p - 1) * sumNeg;
+            uint256 diff = left > right ? left - right : right - left;
 
-            // Calculate difference using a ratio-based approach
-            // We want: below / above ≈ p / (100 - p)
-            // Cross multiply: below * (100 - p) ≈ above * p
-
-            uint256 leftSide = below * (100 - p);
-            uint256 rightSide = above * p;
-            uint256 difference;
-
-            if (leftSide > rightSide) {
-                difference = leftSide - rightSide;
-            } else {
-                difference = rightSide - leftSide;
-            }
-
-            // Update best equilibrium if this is closer to balance
-            if (difference < bestDifference) {
-                bestDifference = difference;
-                bestEquilibrium = p;
+            if (diff < bestExactDiff) {
+                bestExactDiff = diff;
+                bestExact = p;
+                foundExact = true;
             }
         }
 
-        return bestEquilibrium;
+        // Pick the better of gap vs exact
+        if (foundGap && foundExact) {
+            return bestGapDiff <= bestExactDiff
+                ? (bestGap, false)
+                : (bestExact, true);
+        } else if (foundGap) {
+            return (bestGap, false);
+        } else if (foundExact) {
+            return (bestExact, true);
+        }
+
+        // Fallback: no valid equilibrium found
+        return (0, false);
     }
 
     // ========== CLAIMS ==========
@@ -801,17 +831,20 @@ contract PredictionMarket is
 
         uint256 predicted = prediction.percentage;
         uint256 equilibrium = market.equilibrium;
+        bool isExact = lockRefunds[marketId].isExactEquilibrium;
 
-        // Equilibrium bettors are always refunded, never winners
-        if (predicted == equilibrium) {
+        // Exact equilibrium: bets at eq are refunded, not winners
+        if (isExact && predicted == equilibrium) {
             return false;
         }
 
-        // Binary resolution: positive side (above eq) or negative side (below eq)
+        // Gap equilibrium: bets at eq are on negative side (predicted <= eq)
+        // Exact equilibrium: negative = predicted < eq, positive = predicted > eq
         if (market.positiveOutcome) {
             return predicted > equilibrium;
         } else {
-            return predicted < equilibrium;
+            // Negative wins: for gap, predicted <= eq; for exact, predicted < eq
+            return isExact ? predicted < equilibrium : predicted <= equilibrium;
         }
     }
 
@@ -835,9 +868,10 @@ contract PredictionMarket is
             return prediction.amount;
         }
 
-        // Equilibrium bettors get full refund when market is locked or resolved
+        // Exact equilibrium bettors get full refund when market is locked or resolved
         if (
             (market.status == MarketStatus.Locked || market.status == MarketStatus.Resolved) &&
+            lockRefunds[marketId].isExactEquilibrium &&
             prediction.percentage == market.equilibrium
         ) {
             return prediction.amount;
@@ -1013,39 +1047,57 @@ contract PredictionMarket is
      * @param marketId Market ID
      * @param equilibrium Equilibrium percentage
      */
-    function _lockWithEquilibrium(uint256 marketId, uint256 equilibrium) internal {
+    function _lockWithEquilibrium(uint256 marketId, uint256 equilibrium, bool isExact) internal {
         Market storage market = markets[marketId];
 
         require(equilibrium > 0 && equilibrium < 100, "No valid equilibrium");
-        require(_hasTwoSidedMarket(marketId, equilibrium), "One-sided market");
+        require(_hasTwoSidedMarket(marketId, equilibrium, isExact), "One-sided market");
 
-        // Calculate below and above totals
-        uint256 below = _calculateSideTotal(marketId, equilibrium, true);
-        uint256 above = _calculateSideTotal(marketId, equilibrium, false);
+        // Calculate neg and pos totals based on equilibrium type
+        // Gap (isExact=false): neg = sum(0..eq), pos = sum(eq+1..100)
+        // Exact (isExact=true): neg = sum(0..eq-1), pos = sum(eq+1..100), bets at eq refunded
+        uint256 neg = _calculateSideTotal(marketId, equilibrium, true, isExact);
+        uint256 pos = _calculateSideTotal(marketId, equilibrium, false, isExact);
 
-        uint256 leftSide = below * (100 - equilibrium);
-        uint256 rightSide = above * equilibrium;
+        // From CALCULATIONS.md: Ppos / Pneg = sum_neg / sum_pos
+        // Gap:  Pneg = equilibrium,   Ppos = equilibrium + 1
+        // Exact: Pneg = equilibrium - 1, Ppos = equilibrium + 1
+        uint256 pNeg = isExact ? equilibrium - 1 : equilibrium;
+        uint256 pPos = isExact ? equilibrium + 1 : equilibrium + 1;
+
+        // Balance condition: pPos * sum_pos == pNeg * sum_neg
+        // (cross multiplication of Ppos/Pneg = sum_neg/sum_pos)
+        uint256 leftSide = pPos * pos;
+        uint256 rightSide = pNeg * neg;
 
         LockRefundInfo storage lockInfo = lockRefunds[marketId];
+        lockInfo.isExactEquilibrium = isExact;
 
         if (leftSide > rightSide) {
-            // Below side is overweight
-            uint256 targetBelow = (above * equilibrium) / (100 - equilibrium);
-            uint256 excess = below - targetBelow;
-            lockInfo.overweightIsBelow = true;
-            lockInfo.excessAmount = excess;
-            lockInfo.overweightTotal = below;
-            marketPools[marketId] -= excess;
-        } else if (rightSide > leftSide) {
-            // Above side is overweight
-            uint256 targetAbove = (below * (100 - equilibrium)) / equilibrium;
-            uint256 excess = above - targetAbove;
+            // Positive side is overweight: reduce pos to targetPos = neg * pNeg / pPos
+            uint256 targetPos = (neg * pNeg) / pPos;
+            uint256 excess = pos - targetPos;
             lockInfo.overweightIsBelow = false;
             lockInfo.excessAmount = excess;
-            lockInfo.overweightTotal = above;
+            lockInfo.overweightTotal = pos;
+            marketPools[marketId] -= excess;
+        } else if (rightSide > leftSide) {
+            // Negative side is overweight: reduce neg to targetNeg = pos * pPos / pNeg
+            uint256 targetNeg = (pos * pPos) / pNeg;
+            uint256 excess = neg - targetNeg;
+            lockInfo.overweightIsBelow = true;
+            lockInfo.excessAmount = excess;
+            lockInfo.overweightTotal = neg;
             marketPools[marketId] -= excess;
         }
-        // If perfectly balanced, no partial refunds needed
+
+        // If exact equilibrium, also remove equilibrium bets from the active pool
+        if (isExact) {
+            uint256 eqAmount = percentageTotals[marketId][equilibrium];
+            if (eqAmount > 0) {
+                marketPools[marketId] -= eqAmount;
+            }
+        }
 
         market.equilibrium = equilibrium;
         market.status = MarketStatus.Locked;
@@ -1059,13 +1111,24 @@ contract PredictionMarket is
      * @param equilibrium Equilibrium percentage
      * @param isBelow true for below side, false for above side
      */
-    function _calculateSideTotal(uint256 marketId, uint256 equilibrium, bool isBelow) internal view returns (uint256) {
+    /**
+     * @notice Calculate total amount on one side of equilibrium
+     * @param marketId Market ID
+     * @param equilibrium Equilibrium percentage
+     * @param isBelow true for negative side, false for positive side
+     * @param isExact true if equilibrium is exact (bets at eq excluded from both sides),
+     *               false if gap (bets at eq are on the negative/below side)
+     */
+    function _calculateSideTotal(uint256 marketId, uint256 equilibrium, bool isBelow, bool isExact) internal view returns (uint256) {
         uint256 total = 0;
         if (isBelow) {
-            for (uint256 i = 0; i < equilibrium; i++) {
+            // Exact: sum(0..eq-1), Gap: sum(0..eq)
+            uint256 upperBound = isExact ? equilibrium : equilibrium + 1;
+            for (uint256 i = 0; i < upperBound; i++) {
                 total += percentageTotals[marketId][i];
             }
         } else {
+            // Both: sum(eq+1..100)
             for (uint256 i = equilibrium + 1; i <= 100; i++) {
                 total += percentageTotals[marketId][i];
             }
@@ -1079,19 +1142,20 @@ contract PredictionMarket is
      * @param equilibrium Equilibrium percentage
      * @return True if there are stakes on both sides of equilibrium
      */
-    function _hasTwoSidedMarket(uint256 marketId, uint256 equilibrium) internal view returns (bool) {
+    function _hasTwoSidedMarket(uint256 marketId, uint256 equilibrium, bool isExact) internal view returns (bool) {
         bool hasBelow = false;
         bool hasAbove = false;
 
-        if (equilibrium > 0) {
-            for (uint256 i = 0; i < equilibrium; i++) {
-                if (percentageTotals[marketId][i] > 0) {
-                    hasBelow = true;
-                    break;
-                }
+        // Exact: neg = 0..eq-1, Gap: neg = 0..eq
+        uint256 belowUpperBound = isExact ? equilibrium : equilibrium + 1;
+        for (uint256 i = 0; i < belowUpperBound; i++) {
+            if (percentageTotals[marketId][i] > 0) {
+                hasBelow = true;
+                break;
             }
         }
 
+        // Both: pos = eq+1..100
         if (equilibrium < 100) {
             for (uint256 j = equilibrium + 1; j <= 100; j++) {
                 if (percentageTotals[marketId][j] > 0) {
@@ -1118,11 +1182,13 @@ contract PredictionMarket is
         if (lockInfo.excessAmount == 0) {
             return amount;
         }
-        if (percentage == market.equilibrium) {
+        if (lockInfo.isExactEquilibrium && percentage == market.equilibrium) {
             return 0;
         }
 
-        bool isBelow = percentage < market.equilibrium;
+        bool isBelow = lockInfo.isExactEquilibrium
+            ? percentage < market.equilibrium
+            : percentage <= market.equilibrium;
         if (isBelow == lockInfo.overweightIsBelow) {
             uint256 refund = (amount * lockInfo.excessAmount) / lockInfo.overweightTotal;
             return amount - refund;
@@ -1145,15 +1211,23 @@ contract PredictionMarket is
         uint256 equilibrium = market.equilibrium;
         bool positive = market.positiveOutcome;
 
+        bool isExact = lockRefunds[marketId].isExactEquilibrium;
+
         for (uint256 i = 0; i <= 100; i++) {
             uint256 amount = percentageTotals[marketId][i];
-            if (amount > 0 && i != equilibrium) {
-                if (
-                    (positive && i > equilibrium) ||
-                    (!positive && i < equilibrium)
-                ) {
-                    totalWinningBets += _getEffectiveAmount(marketId, amount, i);
-                }
+            if (amount == 0) continue;
+            if (isExact && i == equilibrium) continue; // Exact eq bets are refunded
+
+            bool isWinning;
+            if (positive) {
+                isWinning = i > equilibrium;
+            } else {
+                // Negative wins: gap includes eq, exact excludes eq
+                isWinning = isExact ? i < equilibrium : i <= equilibrium;
+            }
+
+            if (isWinning) {
+                totalWinningBets += _getEffectiveAmount(marketId, amount, i);
             }
         }
 
@@ -1166,10 +1240,8 @@ contract PredictionMarket is
      * @return Distributable pool amount
      */
     function _getDistributablePool(uint256 marketId) internal view returns (uint256) {
-        Market storage market = markets[marketId];
-        uint256 pool = marketPools[marketId]; // Already has lock refund excess subtracted
-        uint256 equilibriumAmount = percentageTotals[marketId][market.equilibrium];
-        return pool > equilibriumAmount ? pool - equilibriumAmount : 0;
+        uint256 pool = marketPools[marketId]; // Already has lock refund excess (and eq bets for exact) subtracted
+        return pool;
     }
 
     /**

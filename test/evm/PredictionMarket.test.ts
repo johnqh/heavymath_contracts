@@ -173,10 +173,11 @@ describe("PredictionMarket (USDC)", function () {
         { account: dealer1.account }
       );
 
-      await market.write.placePrediction([1n, 40n, toUSDC("100")], {
+      // Use larger amounts to ensure fees are non-zero after new formula
+      await market.write.placePrediction([1n, 40n, toUSDC("1000")], {
         account: predictor1.account,
       });
-      await market.write.placePrediction([1n, 80n, toUSDC("100")], {
+      await market.write.placePrediction([1n, 80n, toUSDC("1000")], {
         account: predictor2.account,
       });
 
@@ -184,22 +185,23 @@ describe("PredictionMarket (USDC)", function () {
       await market.write.lockMarket([1n]);
       await market.write.resolveMarket([1n, true], { account: dealer1.account });
 
-      // winnerFeeBps=100 (1%), dealerSharePercent=50 (50/50 split)
-      // distributablePool=200, totalFee=2, dealerFee=1, systemFee=1, winnerPool=198
+      // New formula: eq=40 (gap). neg=1000M(at 40), pos=1000M(at 80).
+      // pNeg=40, pPos=41. pos overweight. excess=24390244. pool=1975609756.
+      // fee=19756097, dealerFee=9878048, systemFee=9878049. winnerPool=1955853659.
       const winnerBefore = await stakeToken.read.balanceOf([predictor2.account.address]);
       await market.write.claimWinnings([1n], { account: predictor2.account });
       const winnerAfter = await stakeToken.read.balanceOf([predictor2.account.address]);
-      expect(winnerAfter - winnerBefore).to.equal(toUSDC("198"));
+      expect(winnerAfter - winnerBefore).to.equal(1955853659n);
 
       const dealerBefore = await stakeToken.read.balanceOf([dealer1.account.address]);
       await market.write.withdrawDealerFees([1n], { account: dealer1.account });
       const dealerAfter = await stakeToken.read.balanceOf([dealer1.account.address]);
-      expect(dealerAfter - dealerBefore).to.equal(toUSDC("1"));
+      expect(dealerAfter - dealerBefore).to.equal(9878048n);
 
       const ownerBefore = await stakeToken.read.balanceOf([owner.account.address]);
       await market.write.withdrawSystemFees({ account: owner.account });
       const ownerAfter = await stakeToken.read.balanceOf([owner.account.address]);
-      expect(ownerAfter - ownerBefore).to.equal(toUSDC("1"));
+      expect(ownerAfter - ownerBefore).to.equal(9878049n);
     });
 
     it("resolves with pre-computed equilibrium (gas-optimized)", async function () {
@@ -222,20 +224,20 @@ describe("PredictionMarket (USDC)", function () {
 
       await advanceTime(86401);
 
-      // Pre-computed equilibrium = 50 (same as what on-chain would compute)
-      await market.write.lockMarketWithEquilibrium([1n, 50n]);
+      // Pre-computed equilibrium = 40 (matches what on-chain lockMarket would compute)
+      await market.write.lockMarketWithEquilibrium([1n, 40n]);
       await market.write.resolveMarket([1n, true], { account: dealer1.account });
 
       const marketData = await market.read.markets([1n]);
       expect(marketData[8]).to.equal(2); // Resolved
-      expect(marketData[10]).to.equal(50n); // equilibrium = 50
+      expect(marketData[10]).to.equal(40n); // equilibrium = 40
 
-      // Verify same payout as standard resolveMarket
-      // winnerFeeBps=100 (1%), distributablePool=200, winnerPool=198
+      // New formula: eq=40 (gap). excess=2439025. pool=197560975.
+      // fee=1975609. winnerPool=195585366. effective=97560975. payout=195585366.
       const winnerBefore = await stakeToken.read.balanceOf([predictor2.account.address]);
       await market.write.claimWinnings([1n], { account: predictor2.account });
       const winnerAfter = await stakeToken.read.balanceOf([predictor2.account.address]);
-      expect(winnerAfter - winnerBefore).to.equal(toUSDC("198"));
+      expect(winnerAfter - winnerBefore).to.equal(195585366n);
     });
 
     it("rejects invalid equilibrium values (0 and 100)", async function () {

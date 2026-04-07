@@ -25,7 +25,7 @@ describe("Equilibrium algorithm (USDC)", function () {
   // ========== GROUP A: Equilibrium Calculation ==========
 
   describe("Equilibrium calculation", function () {
-    it("A1: finds 50% equilibrium for symmetric bets", async function () {
+    it("A1: finds gap equilibrium for symmetric bets", async function () {
       const { market, dealer1, predictor1, predictor2, marketId } =
         await setupMarket();
 
@@ -38,8 +38,10 @@ describe("Equilibrium algorithm (USDC)", function () {
 
       await advanceTime(86401);
 
+      // New formula: gap at g=40. neg=150(at 40), pos=150(at 60).
+      // (41)*150=6150 vs (40)*150=6000. Best gap diff=150.
       const eq = await market.read.calculateEquilibrium([marketId]);
-      expect(eq).to.equal(50n);
+      expect(eq).to.equal(40n);
 
       await market.write.lockMarket([marketId]);
       await market.write.resolveMarket([marketId, true], {
@@ -49,12 +51,13 @@ describe("Equilibrium algorithm (USDC)", function () {
       const [, , , , , , , , , , equilibrium] = await market.read.markets([
         marketId,
       ]);
-      expect(equilibrium).to.equal(50n);
+      expect(equilibrium).to.equal(40n);
     });
 
-    it("A2: finds asymmetric equilibrium for uneven amounts", async function () {
+    it("A2: finds gap equilibrium for uneven amounts", async function () {
       // bet(20, $300) + bet(80, $100)
-      // For p=75: below=300, above=100. 300*25=7500 vs 100*75=7500. Diff=0.
+      // New formula gap at g=20: neg=300(at 20), pos=100(at 80).
+      // (21)*100=2100 vs (20)*300=6000. diff=3900 (best among all gaps).
       const { market, predictor1, predictor2, marketId } =
         await setupMarket();
 
@@ -68,18 +71,19 @@ describe("Equilibrium algorithm (USDC)", function () {
       await advanceTime(86401);
 
       const eq = await market.read.calculateEquilibrium([marketId]);
-      expect(eq).to.equal(75n);
+      expect(eq).to.equal(20n);
 
       await market.write.lockMarket([marketId]);
 
       const [, , , , , , , , , , equilibrium] = await market.read.markets([marketId]);
-      expect(equilibrium).to.equal(75n);
+      expect(equilibrium).to.equal(20n);
     });
 
     it("A3: handles multiple bettors per side", async function () {
       // bet(20,$100) + bet(30,$200) + bet(70,$150)
-      // For p=22: below=100 (at 20), above=350 (at 30+70). |100*78-350*22|=|7800-7700|=100
-      // This beats all other candidates including p=67 (diff=150) and p=1 (diff=450)
+      // New formula: exact at p=30 wins (diff=1750, best).
+      // neg=100(at 20), pos=150(at 70), eqAmt=200(at 30).
+      // (31)*150=4650 vs (29)*100=2900. diff=1750.
       const { market, predictor1, predictor2, predictor3, marketId } =
         await setupMarket();
 
@@ -96,10 +100,10 @@ describe("Equilibrium algorithm (USDC)", function () {
       await advanceTime(86401);
 
       const eq = await market.read.calculateEquilibrium([marketId]);
-      expect(eq).to.equal(22n);
+      expect(eq).to.equal(30n);
     });
 
-    it("A4: adjacent bets at 49 and 51 give equilibrium 50", async function () {
+    it("A4: adjacent bets at 49 and 51 give equilibrium 49", async function () {
       const { market, predictor1, predictor2, marketId } = await setupMarket();
 
       await market.write.placePrediction([marketId, 49n, toUSDC("100")], {
@@ -111,11 +115,13 @@ describe("Equilibrium algorithm (USDC)", function () {
 
       await advanceTime(86401);
 
+      // New formula gap at g=49: neg=100(at 49), pos=100(at 51).
+      // (50)*100=5000 vs (49)*100=4900. diff=100 (best).
       const eq = await market.read.calculateEquilibrium([marketId]);
-      expect(eq).to.equal(50n);
+      expect(eq).to.equal(49n);
     });
 
-    it("A5: bets at 0% and 100% give equilibrium 50", async function () {
+    it("A5: bets at 0% and 100% give equilibrium 1", async function () {
       const { market, predictor1, predictor2, marketId } = await setupMarket();
 
       await market.write.placePrediction([marketId, 0n, toUSDC("200")], {
@@ -127,16 +133,20 @@ describe("Equilibrium algorithm (USDC)", function () {
 
       await advanceTime(86401);
 
+      // New formula: for bets at 0% and 100% with equal amounts,
+      // all gap values 1..99 produce the same diff=200.
+      // g=1 is found first: (2)*200=400 vs (1)*200=200, diff=200.
       const eq = await market.read.calculateEquilibrium([marketId]);
-      expect(eq).to.equal(50n);
+      expect(eq).to.equal(1n);
     });
 
     it("A6: calculateEquilibrium view matches lockMarket result", async function () {
       const { market, predictor1, predictor2, marketId } =
         await setupMarket();
 
-      // bet(20, $200) + bet(80, $100) → equilibrium at 67
-      // For p=67: below=200, above=100. |200*33 - 100*67| = |6600-6700| = 100 (minimum)
+      // bet(20, $200) + bet(80, $100)
+      // New formula gap at g=20: neg=200, pos=100.
+      // (21)*100=2100 vs (20)*200=4000. diff=1900 (best).
       await market.write.placePrediction([marketId, 20n, toUSDC("200")], {
         account: predictor1.account,
       });
@@ -147,7 +157,7 @@ describe("Equilibrium algorithm (USDC)", function () {
       await advanceTime(86401);
 
       const eqView = await market.read.calculateEquilibrium([marketId]);
-      expect(eqView).to.equal(67n);
+      expect(eqView).to.equal(20n);
 
       await market.write.lockMarket([marketId]);
 
@@ -160,9 +170,10 @@ describe("Equilibrium algorithm (USDC)", function () {
 
   describe("Lock refund mechanism", function () {
     it("B1: below side overweight gets partial refund", async function () {
-      // bet(20, $300) + bet(80, $100). Force equilibrium=50 via lockMarketWithEquilibrium.
-      // below=300, above=100. leftSide=300*50=15000 > rightSide=100*50=5000
-      // targetBelow = (100*50)/50 = 100. excess = 300-100 = 200.
+      // bet(20, $300) + bet(80, $100). Force equilibrium=50 (gap).
+      // neg=300(at 20, <=50), pos=100(at 80, >50). pNeg=50, pPos=51.
+      // leftSide=51*100=5100, rightSide=50*300=15000. neg overweight.
+      // targetNeg=floor(100*51/50)=102. excess=300-102=198.
       const { market, predictor1, predictor2, marketId } =
         await setupMarket();
 
@@ -176,12 +187,12 @@ describe("Equilibrium algorithm (USDC)", function () {
       await advanceTime(86401);
       await market.write.lockMarketWithEquilibrium([marketId, 50n]);
 
-      // predictor1 (below, overweight) should get lock refund of 200
+      // predictor1 (below, overweight) should get lock refund of 198
       const refund = await market.read.getLockRefundAmount([
         marketId,
         predictor1.account.address,
       ]);
-      expect(refund).to.equal(toUSDC("200"));
+      expect(refund).to.equal(toUSDC("198"));
 
       // predictor2 (above, lighter side) gets no lock refund
       const refund2 = await market.read.getLockRefundAmount([
@@ -192,9 +203,10 @@ describe("Equilibrium algorithm (USDC)", function () {
     });
 
     it("B2: above side overweight gets partial refund", async function () {
-      // bet(20, $100) + bet(80, $300). Force equilibrium=50.
-      // below=100, above=300. rightSide=300*50=15000 > leftSide=100*50=5000
-      // targetAbove = (100*50)/50 = 100. excess = 300-100 = 200.
+      // bet(20, $100) + bet(80, $300). Force equilibrium=50 (gap).
+      // neg=100(at 20, <=50), pos=300(at 80, >50). pNeg=50, pPos=51.
+      // leftSide=51*300=15300, rightSide=50*100=5000. pos overweight.
+      // targetPos=floor(100*50/51)=98. excess=300-98=202.
       const { market, predictor1, predictor2, marketId } = await setupMarket();
 
       await market.write.placePrediction([marketId, 20n, toUSDC("100")], {
@@ -207,12 +219,13 @@ describe("Equilibrium algorithm (USDC)", function () {
       await advanceTime(86401);
       await market.write.lockMarketWithEquilibrium([marketId, 50n]);
 
-      // predictor2 (above, overweight) should get lock refund of 200
+      // predictor2 (above, overweight) should get lock refund
+      // targetPos=floor(100M*50/51)=98039215. excess=300M-98039215-100M=201960785 (~201.96 USDC)
       const refund2 = await market.read.getLockRefundAmount([
         marketId,
         predictor2.account.address,
       ]);
-      expect(refund2).to.equal(toUSDC("200"));
+      expect(refund2).to.equal(201960785n);
 
       // predictor1 (below, lighter) gets nothing
       const refund1 = await market.read.getLockRefundAmount([
@@ -228,7 +241,9 @@ describe("Equilibrium algorithm (USDC)", function () {
 
       // predictor1 (below, overweight): $300 at 20%
       // predictor2 (above, lighter): $100 at 80%
-      // Force equilibrium=50 → below overweight, excess=200
+      // Force equilibrium=50 (gap). neg=300, pos=100. pNeg=50, pPos=51.
+      // rightSide=50*300=15000 > leftSide=51*100=5100. neg overweight.
+      // targetNeg=floor(100*51/50)=102. excess=198.
       await market.write.placePrediction([marketId, 20n, toUSDC("300")], {
         account: predictor1.account,
       });
@@ -243,18 +258,18 @@ describe("Equilibrium algorithm (USDC)", function () {
       const p1Before = await stakeToken.read.balanceOf([predictor1.account.address]);
       await market.write.claimLockRefund([marketId], { account: predictor1.account });
       const p1AfterRefund = await stakeToken.read.balanceOf([predictor1.account.address]);
-      expect(p1AfterRefund - p1Before).to.equal(toUSDC("200"));
+      expect(p1AfterRefund - p1Before).to.equal(toUSDC("198"));
 
       // Resolve below equilibrium: predictor1 wins
       await market.write.resolveMarket([marketId, false], { account: dealer1.account });
 
-      // Pool after lock refund: 400 - 200 = 200. Equilibrium stakes = 0.
-      // distributablePool = 200. fee = 200*100/10000 = 2. winnerPool = 198.
-      // predictor1 effective = 300 - 200 = 100. Total winning = 100. Payout = 198.
+      // Pool after lock refund: 400M - 198M = 202M. fee = 202M*100/10000 = 2020000.
+      // winnerPool = 202M - 2020000 = 199980000.
+      // predictor1 effective = 300M - 198M = 102M. Total winning = 102M. Payout = 199980000.
       const p1BeforeWin = await stakeToken.read.balanceOf([predictor1.account.address]);
       await market.write.claimWinnings([marketId], { account: predictor1.account });
       const p1AfterWin = await stakeToken.read.balanceOf([predictor1.account.address]);
-      expect(p1AfterWin - p1BeforeWin).to.equal(toUSDC("198"));
+      expect(p1AfterWin - p1BeforeWin).to.equal(199980000n);
     });
 
     it("B4: multiple bettors on overweight side get pro-rata refund", async function () {
@@ -329,11 +344,12 @@ describe("Equilibrium algorithm (USDC)", function () {
     it("B6: no lock refund when sides are perfectly balanced", async function () {
       const { market, predictor1, predictor2, marketId } = await setupMarket();
 
-      // Equal amounts on each side → no excess
-      await market.write.placePrediction([marketId, 40n, toUSDC("100")], {
+      // For perfect balance at gap g=40: (41)*pos == (40)*neg.
+      // Use neg=41 USDC (at 40%), pos=40 USDC (at 60%).
+      await market.write.placePrediction([marketId, 40n, toUSDC("41")], {
         account: predictor1.account,
       });
-      await market.write.placePrediction([marketId, 60n, toUSDC("100")], {
+      await market.write.placePrediction([marketId, 60n, toUSDC("40")], {
         account: predictor2.account,
       });
 
@@ -356,9 +372,11 @@ describe("Equilibrium algorithm (USDC)", function () {
   // ========== GROUP C: One-Sided Market ==========
 
   describe("One-sided market detection", function () {
-    it("C1: all bets below — lockMarket reverts", async function () {
+    it("C1: adjacent bets form two-sided market — lockMarket succeeds", async function () {
       const { market, predictor1, predictor2, marketId } = await setupMarket();
 
+      // With new formula, bets at 20 and 30 create a valid two-sided market.
+      // Gap at g=20: neg=100(at 20), pos=100(at 30). Both sides have bets.
       await market.write.placePrediction([marketId, 20n, toUSDC("100")], {
         account: predictor1.account,
       });
@@ -368,12 +386,11 @@ describe("Equilibrium algorithm (USDC)", function () {
 
       await advanceTime(86401);
 
-      try {
-        await market.write.lockMarket([marketId]);
-        expect.fail("Should have reverted");
-      } catch (error: any) {
-        expect(error.message).to.match(/No valid equilibrium|One-sided market/);
-      }
+      // Should succeed with eq=20 (gap)
+      await market.write.lockMarket([marketId]);
+      const data = await market.read.markets([marketId]);
+      expect(data[8]).to.equal(4); // Locked
+      expect(data[10]).to.equal(20n); // equilibrium=20
     });
 
     it("C2: all bets at same percentage — lockMarket reverts", async function () {
@@ -541,7 +558,7 @@ describe("Equilibrium algorithm (USDC)", function () {
         account: fixtures1.predictor2.account,
       });
 
-      // Market 2: pre-computed equilibrium
+      // Market 2: pre-computed equilibrium (must match auto=40)
       const block2 = await fixtures2.publicClient.getBlock();
       const deadline2 = block2.timestamp + 86401n;
       await fixtures2.market.write.createMarket(
@@ -557,8 +574,10 @@ describe("Equilibrium algorithm (USDC)", function () {
 
       await advanceTime(86401);
 
+      // Auto lockMarket computes eq=40 (gap)
       await fixtures1.market.write.lockMarket([1n]);
-      await fixtures2.market.write.lockMarketWithEquilibrium([1n, 50n]);
+      // Pre-computed must use same eq=40
+      await fixtures2.market.write.lockMarketWithEquilibrium([1n, 40n]);
 
       const data1 = await fixtures1.market.read.markets([1n]);
       const data2 = await fixtures2.market.read.markets([1n]);
@@ -693,8 +712,10 @@ describe("Equilibrium algorithm (USDC)", function () {
         account: dealer1.account,
       });
 
-      // Total pool = 450 USDC, but 150 USDC sits at equilibrium and should be refunded.
-      // Winners split the 300 USDC pool minus 1% fee (3 USDC) = 297 USDC.
+      // New formula: eq=50 (exact). eqAmt=150M. neg=150M(at 30), pos=150M(at 80).
+      // pNeg=49, pPos=51. pos overweight. excess=5882353. pool=450M-5882353-150M=294117647.
+      // fee=2941176. winnerPool=291176471.
+      // Winner=bet(80). effective=150M-5882353=144117647. payout=291176471.
       const winnerBefore = await stakeToken.read.balanceOf([
         predictor3.account.address,
       ]);
@@ -705,7 +726,7 @@ describe("Equilibrium algorithm (USDC)", function () {
         predictor3.account.address,
       ]);
 
-      expect(winnerAfter - winnerBefore).to.equal(toUSDC("297"));
+      expect(winnerAfter - winnerBefore).to.equal(291176471n);
     });
   });
 
@@ -788,8 +809,9 @@ describe("Equilibrium algorithm (USDC)", function () {
     it("I1: bet at 0% and 50% — equilibrium near lower boundary", async function () {
       const { market, predictor1, predictor2, marketId } = await setupMarket();
 
-      // bet(0,$100) + bet(50,$100) → eq=49
-      // At p=49: below(0)=100, above(50)=100. diff=|100*51-100*49|=200 (minimum)
+      // bet(0,$100) + bet(50,$100)
+      // New formula: gap at g=1 has diff=100, same as all gaps up to g=49.
+      // g=1 found first: neg=100(at 0, <=1), pos=100(at 50, >1).
       await market.write.placePrediction([marketId, 0n, toUSDC("100")], {
         account: predictor1.account,
       });
@@ -800,12 +822,12 @@ describe("Equilibrium algorithm (USDC)", function () {
       await advanceTime(86401);
 
       const eq = await market.read.calculateEquilibrium([marketId]);
-      expect(eq).to.equal(49n);
+      expect(eq).to.equal(1n);
 
       await market.write.lockMarket([marketId]);
       const data = await market.read.markets([marketId]);
       expect(data[8]).to.equal(4); // Locked
-      expect(data[10]).to.equal(49n);
+      expect(data[10]).to.equal(1n);
     });
 
     it("I2: bet at 50% and 100% — forced equilibrium=51", async function () {
@@ -829,7 +851,7 @@ describe("Equilibrium algorithm (USDC)", function () {
       expect(data[10]).to.equal(51n);
     });
 
-    it("I3: bet at 0% and 100% — eq=50, full lifecycle with payouts", async function () {
+    it("I3: bet at 0% and 100% — eq=1, full lifecycle with payouts", async function () {
       const { market, dealer1, predictor1, predictor2, stakeToken, marketId } =
         await setupMarket();
 
@@ -844,29 +866,34 @@ describe("Equilibrium algorithm (USDC)", function () {
       await market.write.lockMarket([marketId]);
 
       const data = await market.read.markets([marketId]);
-      expect(data[10]).to.equal(50n); // equilibrium=50
+      expect(data[10]).to.equal(1n); // equilibrium=1 (gap)
 
-      // No lock refund (balanced: 100*50 == 100*50)
+      // pNeg=1, pPos=2. left=2*100=200, right=1*100=100. pos overweight.
+      // targetPos=floor(100*1/2)=50. excess=50.
+      // predictor1 (neg, not overweight): refund=0
+      // predictor2 (pos, overweight): refund=floor(100*50/100)=50
       const refund1 = await market.read.getLockRefundAmount([marketId, predictor1.account.address]);
       const refund2 = await market.read.getLockRefundAmount([marketId, predictor2.account.address]);
       expect(refund1).to.equal(0n);
-      expect(refund2).to.equal(0n);
+      expect(refund2).to.equal(toUSDC("50"));
 
       // Resolve above eq: predictor2 (100%) wins
       await market.write.resolveMarket([marketId, true], { account: dealer1.account });
 
-      // Pool=200, fee=2, winnerPool=198
+      // Pool=200M-50M=150M. fee=150M*100/10000=1500000. winnerPool=148500000.
+      // predictor2 effective=50M. payout=148500000.
       const before = await stakeToken.read.balanceOf([predictor2.account.address]);
       await market.write.claimWinnings([marketId], { account: predictor2.account });
       const after = await stakeToken.read.balanceOf([predictor2.account.address]);
-      expect(after - before).to.equal(toUSDC("198"));
+      expect(after - before).to.equal(148500000n);
     });
 
-    it("I4: bet(0,$100) + bet(100,$300) — equilibrium=25", async function () {
+    it("I4: bet(0,$100) + bet(100,$300) — equilibrium=1", async function () {
       const { market, dealer1, predictor1, predictor2, stakeToken, marketId } =
         await setupMarket();
 
-      // At p=25: below=100, above=300. |100*75-300*25|=0
+      // New formula: gap at g=1. neg=100(at 0), pos=300(at 100).
+      // (2)*300=600 vs (1)*100=100. diff=500. Same diff at all g values.
       await market.write.placePrediction([marketId, 0n, toUSDC("100")], {
         account: predictor1.account,
       });
@@ -877,29 +904,34 @@ describe("Equilibrium algorithm (USDC)", function () {
       await advanceTime(86401);
 
       const eq = await market.read.calculateEquilibrium([marketId]);
-      expect(eq).to.equal(25n);
+      expect(eq).to.equal(1n);
 
       await market.write.lockMarket([marketId]);
 
-      // Balanced → no lock refund
+      // pNeg=1, pPos=2. left=600, right=100. pos overweight.
+      // targetPos=floor(100*1/2)=50. excess=250.
+      // predictor2 (pos): refund=floor(300*250/300)=250
       expect(await market.read.getLockRefundAmount([marketId, predictor1.account.address])).to.equal(0n);
-      expect(await market.read.getLockRefundAmount([marketId, predictor2.account.address])).to.equal(0n);
+      expect(await market.read.getLockRefundAmount([marketId, predictor2.account.address])).to.equal(toUSDC("250"));
 
-      // Resolve above eq=25: predictor2 wins
+      // Resolve above eq=1: predictor2 wins
       await market.write.resolveMarket([marketId, true], { account: dealer1.account });
 
-      // Pool=400, fee=4, winnerPool=396
+      // Pool=400M-250M=150M. fee=1500000. winnerPool=148500000.
+      // predictor2 effective=50M. payout=148500000.
       const before = await stakeToken.read.balanceOf([predictor2.account.address]);
       await market.write.claimWinnings([marketId], { account: predictor2.account });
       const after = await stakeToken.read.balanceOf([predictor2.account.address]);
-      expect(after - before).to.equal(toUSDC("396"));
+      expect(after - before).to.equal(148500000n);
     });
 
-    it("I5: bet(0,$300) + bet(100,$100) — equilibrium=75", async function () {
+    it("I5: bet(0,$300) + bet(100,$100) — equilibrium=1", async function () {
       const { market, dealer1, predictor1, predictor2, stakeToken, marketId } =
         await setupMarket();
 
-      // At p=75: below=300, above=100. |300*25-100*75|=0
+      // New formula: gap at g=1. neg=300(at 0), pos=100(at 100).
+      // (2)*100=200 vs (1)*300=300. neg overweight.
+      // diff=100 (same at all gap values).
       await market.write.placePrediction([marketId, 0n, toUSDC("300")], {
         account: predictor1.account,
       });
@@ -910,26 +942,37 @@ describe("Equilibrium algorithm (USDC)", function () {
       await advanceTime(86401);
 
       const eq = await market.read.calculateEquilibrium([marketId]);
-      expect(eq).to.equal(75n);
+      expect(eq).to.equal(1n);
 
       await market.write.lockMarket([marketId]);
 
-      // Resolve below eq=75: predictor1 wins
+      // pNeg=1, pPos=2. left=200, right=300. neg overweight.
+      // targetNeg=floor(100*2/1)=200. excess=100.
+      // predictor1 (neg): refund=floor(300*100/300)=100
+
+      // Resolve below eq=1: predictor1 wins
       await market.write.resolveMarket([marketId, false], { account: dealer1.account });
 
-      // Pool=400, fee=4, winnerPool=396
+      // Pool=400-100=300. fee=3. winnerPool=297.
+      // predictor1 effective=300-100=200. payout=297.
       const before = await stakeToken.read.balanceOf([predictor1.account.address]);
       await market.write.claimWinnings([marketId], { account: predictor1.account });
       const after = await stakeToken.read.balanceOf([predictor1.account.address]);
-      expect(after - before).to.equal(toUSDC("396"));
+      expect(after - before).to.equal(toUSDC("297"));
     });
 
     it("I6: bets at 0%, 50%, 100% — middle bettor gets full refund", async function () {
       const { market, dealer1, predictor1, predictor2, predictor3, stakeToken, marketId } =
         await setupMarket();
 
-      // At p=50: below(0)=100, above(100)=100. diff=0. Eq=50.
-      // Bet at 50% is at equilibrium → full refund.
+      // New formula: exact at p=50. neg=100(at 0), pos=100(at 100), eqAmt=100(at 50).
+      // (51)*100=5100 vs (49)*100=4900. diff=200. Better than any gap (gap at g=1: diff=100 but
+      // that's for gap; exact at 50 has diff=200 vs best gap diff=100... actually gap wins here).
+      // Wait: gap at g=1 with all bets: neg=sum(0..1)=100, pos=sum(2..100)=200.
+      // (2)*200=400 vs (1)*100=100. diff=300.
+      // gap at g=49: neg=100(at 0), pos=200(50+100). (50)*200=10000 vs (49)*100=4900. diff=5100.
+      // gap at g=50: neg=200(0+50), pos=100(100). (51)*100=5100 vs (50)*200=10000. diff=4900.
+      // Best gap: g=1, diff=300. vs exact at 50: diff=200. Exact wins!
       await market.write.placePrediction([marketId, 0n, toUSDC("100")], {
         account: predictor1.account,
       });
@@ -948,7 +991,7 @@ describe("Equilibrium algorithm (USDC)", function () {
 
       await market.write.resolveMarket([marketId, true], { account: dealer1.account });
 
-      // predictor2 at eq=50 gets full refund
+      // predictor2 at eq=50 (exact) gets full refund
       const refund = await market.read.getRefundAmount([marketId, predictor2.account.address]);
       expect(refund).to.equal(toUSDC("100"));
 
@@ -957,18 +1000,23 @@ describe("Equilibrium algorithm (USDC)", function () {
       const p2After = await stakeToken.read.balanceOf([predictor2.account.address]);
       expect(p2After - p2Before).to.equal(toUSDC("100"));
 
-      // predictor3 (100%, above eq) wins. Pool=300, eqStakes=100, distributable=200, fee=2, winnerPool=198.
+      // predictor3 (100%, above eq) wins.
+      // pNeg=49, pPos=51. pos overweight. excess=3921569.
+      // pool=300M-3921569-100M=196078431. fee=1960784. winnerPool=194117647.
+      // effective(100)=100M-3921569=96078431. payout=194117647.
       const p3Before = await stakeToken.read.balanceOf([predictor3.account.address]);
       await market.write.claimWinnings([marketId], { account: predictor3.account });
       const p3After = await stakeToken.read.balanceOf([predictor3.account.address]);
-      expect(p3After - p3Before).to.equal(toUSDC("198"));
+      expect(p3After - p3Before).to.equal(194117647n);
     });
 
-    it("I7: bets at 0%, 1%, 99%, 100% — equilibrium=50", async function () {
+    it("I7: bets at 0%, 1%, 99%, 100% — equilibrium=1", async function () {
       const { market, dealer1, predictor1, predictor2, predictor3, dealer2, stakeToken, marketId } =
         await setupMarket();
 
-      // All $100. At p=50: below=200 (0+1), above=200 (99+100). diff=0.
+      // All $100. New formula: gap at g=1.
+      // neg=sum(0..1)=200, pos=sum(2..100)=200. (2)*200=400 vs (1)*200=200. diff=200.
+      // Same diff at all g, so g=1 found first.
       await market.write.placePrediction([marketId, 0n, toUSDC("100")], {
         account: predictor1.account,
       });
@@ -985,31 +1033,38 @@ describe("Equilibrium algorithm (USDC)", function () {
       await advanceTime(86401);
 
       const eq = await market.read.calculateEquilibrium([marketId]);
-      expect(eq).to.equal(50n);
+      expect(eq).to.equal(1n);
 
       await market.write.lockMarket([marketId]);
 
-      // Resolve positive: above-side winners (99, 100)
+      // pNeg=1, pPos=2. left=2*200=400, right=1*200=200. pos overweight.
+      // targetPos=floor(200*1/2)=100. excess=100. pool=300.
+
+      // Resolve positive: above-side winners (99, 100) — pct > 1
       await market.write.resolveMarket([marketId, true], { account: dealer1.account });
 
-      // Pool=400, eqStakes=0, distributable=400, fee=4, winnerPool=396
-      // Each winner: (100*396)/200 = 198
+      // Pool=300M, fee=3M, winnerPool=297M.
+      // Each winner effective: 100M-50M=50M. totalWin=100M.
+      // Each payout: 50M*297M/100M=148500000
       const p3Before = await stakeToken.read.balanceOf([predictor3.account.address]);
       await market.write.claimWinnings([marketId], { account: predictor3.account });
       const p3After = await stakeToken.read.balanceOf([predictor3.account.address]);
-      expect(p3After - p3Before).to.equal(toUSDC("198"));
+      expect(p3After - p3Before).to.equal(148500000n);
 
       const d2Before = await stakeToken.read.balanceOf([dealer2.account.address]);
       await market.write.claimWinnings([marketId], { account: dealer2.account });
       const d2After = await stakeToken.read.balanceOf([dealer2.account.address]);
-      expect(d2After - d2Before).to.equal(toUSDC("198"));
+      expect(d2After - d2Before).to.equal(148500000n);
     });
 
     it("I8: multiple bettors at 0% vs one at 100%", async function () {
       const { market, dealer1, predictor1, predictor2, predictor3, stakeToken, marketId } =
         await setupMarket();
 
-      // bet(0,$150) + bet(0,$150) + bet(100,$300) → eq=50, balanced
+      // bet(0,$150) + bet(0,$150) + bet(100,$300)
+      // New formula: gap at g=1. neg=300(at 0), pos=300(at 100).
+      // (2)*300=600 vs (1)*300=300. diff=300. Same at all g. g=1 found first.
+      // pos overweight. targetPos=floor(300*1/2)=150. excess=150. pool=450.
       await market.write.placePrediction([marketId, 0n, toUSDC("150")], {
         account: predictor1.account,
       });
@@ -1024,22 +1079,22 @@ describe("Equilibrium algorithm (USDC)", function () {
       await market.write.lockMarket([marketId]);
 
       const data = await market.read.markets([marketId]);
-      expect(data[10]).to.equal(50n);
+      expect(data[10]).to.equal(1n);
 
       // Resolve below eq: predictors at 0% win
       await market.write.resolveMarket([marketId, false], { account: dealer1.account });
 
-      // Pool=600, fee=6, winnerPool=594. Two winners: 150 each, total=300.
-      // Each gets (150*594)/300 = 297
+      // Pool=450M, fee=4500000, winnerPool=445500000. Two winners: 150M each.
+      // Each gets 150M*445500000/300M = 222750000
       const p1Before = await stakeToken.read.balanceOf([predictor1.account.address]);
       await market.write.claimWinnings([marketId], { account: predictor1.account });
       const p1After = await stakeToken.read.balanceOf([predictor1.account.address]);
-      expect(p1After - p1Before).to.equal(toUSDC("297"));
+      expect(p1After - p1Before).to.equal(222750000n);
 
       const p2Before = await stakeToken.read.balanceOf([predictor2.account.address]);
       await market.write.claimWinnings([marketId], { account: predictor2.account });
       const p2After = await stakeToken.read.balanceOf([predictor2.account.address]);
-      expect(p2After - p2Before).to.equal(toUSDC("297"));
+      expect(p2After - p2Before).to.equal(222750000n);
     });
   });
 
@@ -1050,9 +1105,11 @@ describe("Equilibrium algorithm (USDC)", function () {
       const { market, dealer1, dealer2, predictor1, predictor2, predictor3, stakeToken, marketId } =
         await setupMarket();
 
-      // 3 at 20% ($150 each = $450) + 1 at 80% ($150). Force eq=50.
-      // below=450, above=150. targetBelow=(150*50)/50=150. excess=300.
-      // Each below refund = (150*300)/450 = $100.
+      // 3 at 20% ($150 each = $450) + 1 at 80% ($150). Force eq=50 (gap).
+      // neg=450, pos=150. pNeg=50, pPos=51.
+      // left=51*150=7650, right=50*450=22500. neg overweight.
+      // targetNeg=floor(150*51/50)=153. excess=450-153=297.
+      // Each below refund = floor(150*297/450) = $99.
       await market.write.placePrediction([marketId, 20n, toUSDC("150")], {
         account: predictor1.account,
       });
@@ -1069,13 +1126,13 @@ describe("Equilibrium algorithm (USDC)", function () {
       await advanceTime(86401);
       await market.write.lockMarketWithEquilibrium([marketId, 50n]);
 
-      // All 3 below bettors get $100 lock refund each
+      // All 3 below bettors get $99 lock refund each
       const r1 = await market.read.getLockRefundAmount([marketId, predictor1.account.address]);
       const r2 = await market.read.getLockRefundAmount([marketId, predictor2.account.address]);
       const r3 = await market.read.getLockRefundAmount([marketId, predictor3.account.address]);
-      expect(r1).to.equal(toUSDC("100"));
-      expect(r2).to.equal(toUSDC("100"));
-      expect(r3).to.equal(toUSDC("100"));
+      expect(r1).to.equal(toUSDC("99"));
+      expect(r2).to.equal(toUSDC("99"));
+      expect(r3).to.equal(toUSDC("99"));
 
       // Above bettor gets no lock refund
       expect(await market.read.getLockRefundAmount([marketId, dealer2.account.address])).to.equal(0n);
@@ -1088,19 +1145,20 @@ describe("Equilibrium algorithm (USDC)", function () {
       // Resolve below eq → below wins
       await market.write.resolveMarket([marketId, false], { account: dealer1.account });
 
-      // Pool after excess: 600-300=300. eqStakes=0. distributable=300. fee=3. winnerPool=297.
-      // Each winner effective=150-100=50. totalWinning=150. Each payout=(50*297)/150=99.
+      // Pool=600M-297M=303M. fee=303M*100/10000=3030000. winnerPool=299970000.
+      // Each effective=150M-99M=51M. totalWin=153M. Each payout=51M*299970000/153M=99990000.
       const p1Before = await stakeToken.read.balanceOf([predictor1.account.address]);
       await market.write.claimWinnings([marketId], { account: predictor1.account });
       const p1After = await stakeToken.read.balanceOf([predictor1.account.address]);
-      expect(p1After - p1Before).to.equal(toUSDC("99"));
+      expect(p1After - p1Before).to.equal(99990000n);
     });
 
     it("J2: 3 below bettors refunded, above side wins", async function () {
       const { market, dealer1, dealer2, predictor1, predictor2, predictor3, stakeToken, marketId } =
         await setupMarket();
 
-      // Same setup: 3 at 20% ($150) + 1 at 80% ($150). eq=50.
+      // Same setup: 3 at 20% ($150) + 1 at 80% ($150). Force eq=50 (gap).
+      // neg=450, pos=150. neg overweight. excess=297. Each below refund=99.
       await market.write.placePrediction([marketId, 20n, toUSDC("150")], {
         account: predictor1.account,
       });
@@ -1120,26 +1178,27 @@ describe("Equilibrium algorithm (USDC)", function () {
       // Resolve above eq → above wins
       await market.write.resolveMarket([marketId, true], { account: dealer1.account });
 
-      // Above bettor effective=150 (lighter side, no refund). totalWinning=150. winnerPool=297.
-      // Payout = (150*297)/150 = 297.
+      // Above bettor effective=150M (lighter side, no refund). totalWinning=150M.
+      // Pool=303M, fee=3030000, winnerPool=299970000. Payout=150M*299970000/150M=299970000.
       const d2Before = await stakeToken.read.balanceOf([dealer2.account.address]);
       await market.write.claimWinnings([marketId], { account: dealer2.account });
       const d2After = await stakeToken.read.balanceOf([dealer2.account.address]);
-      expect(d2After - d2Before).to.equal(toUSDC("297"));
+      expect(d2After - d2Before).to.equal(299970000n);
 
-      // Below bettors are losers, but can still claim lock refunds
+      // Below bettors are losers, but can still claim lock refunds ($99 each)
       const p1Before = await stakeToken.read.balanceOf([predictor1.account.address]);
       await market.write.claimLockRefund([marketId], { account: predictor1.account });
       const p1After = await stakeToken.read.balanceOf([predictor1.account.address]);
-      expect(p1After - p1Before).to.equal(toUSDC("100"));
+      expect(p1After - p1Before).to.equal(toUSDC("99"));
     });
 
     it("J3: 3 above bettors refunded (mirrored)", async function () {
       const { market, dealer1, dealer2, predictor1, predictor2, predictor3, stakeToken, marketId } =
         await setupMarket();
 
-      // 1 at 20% ($150) + 3 at 80% ($150 each = $450). Force eq=50.
-      // above=450, below=150. targetAbove=(150*50)/50=150. excess=300. Each above refund=$100.
+      // 1 at 20% ($150) + 3 at 80% ($150 each = $450). Force eq=50 (gap).
+      // neg=150, pos=450. pNeg=50, pPos=51. left=51*450=22950, right=50*150=7500.
+      // pos overweight. targetPos=floor(150*50/51)=147. excess=303. Each above refund=floor(150*303/450)=101.
       await market.write.placePrediction([marketId, 20n, toUSDC("150")], {
         account: predictor1.account,
       });
@@ -1156,10 +1215,10 @@ describe("Equilibrium algorithm (USDC)", function () {
       await advanceTime(86401);
       await market.write.lockMarketWithEquilibrium([marketId, 50n]);
 
-      // All 3 above bettors refunded $100
-      expect(await market.read.getLockRefundAmount([marketId, predictor2.account.address])).to.equal(toUSDC("100"));
-      expect(await market.read.getLockRefundAmount([marketId, predictor3.account.address])).to.equal(toUSDC("100"));
-      expect(await market.read.getLockRefundAmount([marketId, dealer2.account.address])).to.equal(toUSDC("100"));
+      // All 3 above bettors refunded: floor(150M*302941177/450M) = 100980392 each
+      expect(await market.read.getLockRefundAmount([marketId, predictor2.account.address])).to.equal(100980392n);
+      expect(await market.read.getLockRefundAmount([marketId, predictor3.account.address])).to.equal(100980392n);
+      expect(await market.read.getLockRefundAmount([marketId, dealer2.account.address])).to.equal(100980392n);
 
       // Below bettor gets no lock refund
       expect(await market.read.getLockRefundAmount([marketId, predictor1.account.address])).to.equal(0n);
@@ -1167,23 +1226,26 @@ describe("Equilibrium algorithm (USDC)", function () {
       // Resolve above eq → above wins
       await market.write.resolveMarket([marketId, true], { account: dealer1.account });
 
-      // Each above bettor effective=50. totalWinning=150. winnerPool=297. Each payout=99.
+      // Pool=600M-302941177=297058823. fee=2970588. winnerPool=294088235.
+      // Each effective=150M-100980392=49019608. totalWin=147058823 (from percentageTotals).
+      // Each payout=49019608*294088235/147058823=98029412.
       const p2Before = await stakeToken.read.balanceOf([predictor2.account.address]);
       await market.write.claimWinnings([marketId], { account: predictor2.account });
       const p2After = await stakeToken.read.balanceOf([predictor2.account.address]);
-      expect(p2After - p2Before).to.equal(toUSDC("99"));
+      expect(p2After - p2Before).to.equal(98029412n);
     });
   });
 
   // ========== GROUP K: Complex Multi-Bettor Combinations ==========
 
   describe("Complex multi-bettor combinations", function () {
-    it("K1: 4 bettors evenly spread — natural equilibrium=25", async function () {
+    it("K1: 4 bettors evenly spread — natural equilibrium=40", async function () {
       const { market, dealer1, dealer2, predictor1, predictor2, predictor3, stakeToken, marketId } =
         await setupMarket();
 
       // bet(20,$100) + bet(40,$100) + bet(60,$100) + bet(80,$100)
-      // At p=25: below=100 (at 20), above=300 (40+60+80). |100*75-300*25|=0. Eq=25.
+      // New formula: gap at g=40. neg=200(20+40), pos=200(60+80).
+      // (41)*200=8200 vs (40)*200=8000. diff=200 (best).
       await market.write.placePrediction([marketId, 20n, toUSDC("100")], {
         account: predictor1.account,
       });
@@ -1200,34 +1262,39 @@ describe("Equilibrium algorithm (USDC)", function () {
       await advanceTime(86401);
 
       const eq = await market.read.calculateEquilibrium([marketId]);
-      expect(eq).to.equal(25n);
+      expect(eq).to.equal(40n);
 
       await market.write.lockMarket([marketId]);
 
-      // Balanced → no lock refund
+      // pos overweight by 5. predictor1 (neg) no refund.
       expect(await market.read.getLockRefundAmount([marketId, predictor1.account.address])).to.equal(0n);
 
-      // Resolve above eq=25: 3 winners (40, 60, 80)
+      // Resolve above eq=40: 2 winners (60, 80)
       await market.write.resolveMarket([marketId, true], { account: dealer1.account });
 
-      // Pool=400, fee=4, winnerPool=396. 3 winners with $100 each. Each: (100*396)/300=132.
-      const p2Before = await stakeToken.read.balanceOf([predictor2.account.address]);
-      await market.write.claimWinnings([marketId], { account: predictor2.account });
-      const p2After = await stakeToken.read.balanceOf([predictor2.account.address]);
-      expect(p2After - p2Before).to.equal(toUSDC("132"));
+      // Pool=400M-4878049=395121951. fee=3951219. winnerPool=391170732.
+      // Each winner effective: 100M-2439024=97560976. totalWin=195121952.
+      // Each payout: 97560976*391170732/195121952=195585366.
+      const p3Before = await stakeToken.read.balanceOf([predictor3.account.address]);
+      await market.write.claimWinnings([marketId], { account: predictor3.account });
+      const p3After = await stakeToken.read.balanceOf([predictor3.account.address]);
+      expect(p3After - p3Before).to.equal(195585366n);
 
-      // Loser at 20% gets nothing
+      // Losers at 20% and 40% get nothing
       const payout1 = await market.read.calculatePayout([marketId, predictor1.account.address]);
       expect(payout1).to.equal(0n);
+      const payout2 = await market.read.calculatePayout([marketId, predictor2.account.address]);
+      expect(payout2).to.equal(0n);
     });
 
     it("K2: many small bets vs one large bet with forced equilibrium", async function () {
       const { market, dealer1, predictor1, predictor2, predictor3, stakeToken, marketId } =
         await setupMarket();
 
-      // bet(20,$50) + bet(30,$50) + bet(70,$300). Force eq=50.
-      // below=100, above=300. Above overweight.
-      // targetAbove=(100*50)/50=100. excess=200. Refund for predictor3=(300*200)/300=$200.
+      // bet(20,$50) + bet(30,$50) + bet(70,$300). Force eq=50 (gap).
+      // neg=100(20+30), pos=300(70). pNeg=50, pPos=51.
+      // left=51*300=15300, right=50*100=5000. pos overweight.
+      // targetPos=floor(100*50/51)=98. excess=202. Refund for predictor3=floor(300*202/300)=$202.
       await market.write.placePrediction([marketId, 20n, toUSDC("50")], {
         account: predictor1.account,
       });
@@ -1241,20 +1308,20 @@ describe("Equilibrium algorithm (USDC)", function () {
       await advanceTime(86401);
       await market.write.lockMarketWithEquilibrium([marketId, 50n]);
 
-      // Large bettor gets $200 lock refund
-      expect(await market.read.getLockRefundAmount([marketId, predictor3.account.address])).to.equal(toUSDC("200"));
+      // Large bettor gets lock refund: floor(300M*201960785/300M)=201960785
+      expect(await market.read.getLockRefundAmount([marketId, predictor3.account.address])).to.equal(201960785n);
       // Small bettors get nothing (lighter side)
       expect(await market.read.getLockRefundAmount([marketId, predictor1.account.address])).to.equal(0n);
 
       // Resolve above eq → predictor3 wins
       await market.write.resolveMarket([marketId, true], { account: dealer1.account });
 
-      // Pool after excess: 400-200=200. distributable=200. fee=2. winnerPool=198.
-      // predictor3 effective=300-200=100. totalWinning=100. Payout=198.
+      // Pool=400M-201960785=198039215. fee=1980392. winnerPool=196058823.
+      // predictor3 effective=300M-201960785=98039215. payout=196058823.
       const p3Before = await stakeToken.read.balanceOf([predictor3.account.address]);
       await market.write.claimWinnings([marketId], { account: predictor3.account });
       const p3After = await stakeToken.read.balanceOf([predictor3.account.address]);
-      expect(p3After - p3Before).to.equal(toUSDC("198"));
+      expect(p3After - p3Before).to.equal(196058823n);
     });
 
     it("K3: boundaries + equilibrium bettor + lock refund combined", async function () {
@@ -1262,9 +1329,11 @@ describe("Equilibrium algorithm (USDC)", function () {
         await setupMarket();
 
       // bet(0,$100) + bet(25,$100) + bet(50,$100) + bet(75,$100). Force eq=50.
-      // below=200 (0+25), above=100 (75). Bet at 50 is eq → full refund.
-      // Below overweight: targetBelow=(100*50)/50=100. excess=100.
-      // predictor1 refund=(100*100)/200=$50. predictor2 refund=(100*100)/200=$50.
+      // isExact: bets at 50=100, neg(0+25)=200>0, pos(75)=100>0. Exact!
+      // neg=200(0+25), pos=100(75). pNeg=49, pPos=51.
+      // left=51*100=5100, right=49*200=9800. neg overweight.
+      // targetNeg=floor(100*51/49)=104. excess=200-104=96.
+      // predictor1 refund=floor(100*96/200)=$48. predictor2 refund=$48.
       await market.write.placePrediction([marketId, 0n, toUSDC("100")], {
         account: predictor1.account,
       });
@@ -1281,9 +1350,9 @@ describe("Equilibrium algorithm (USDC)", function () {
       await advanceTime(86401);
       await market.write.lockMarketWithEquilibrium([marketId, 50n]);
 
-      // Below bettors get lock refund
-      expect(await market.read.getLockRefundAmount([marketId, predictor1.account.address])).to.equal(toUSDC("50"));
-      expect(await market.read.getLockRefundAmount([marketId, predictor2.account.address])).to.equal(toUSDC("50"));
+      // Below bettors get lock refund: floor(100M*95918368/200M) = 47959184 each
+      expect(await market.read.getLockRefundAmount([marketId, predictor1.account.address])).to.equal(47959184n);
+      expect(await market.read.getLockRefundAmount([marketId, predictor2.account.address])).to.equal(47959184n);
       // Equilibrium bettor: no lock refund (gets full refund via claimRefund)
       expect(await market.read.getLockRefundAmount([marketId, predictor3.account.address])).to.equal(0n);
       // Above bettor: no lock refund (lighter side)
@@ -1292,11 +1361,11 @@ describe("Equilibrium algorithm (USDC)", function () {
       // Resolve above eq → dealer2 (75%) wins
       await market.write.resolveMarket([marketId, true], { account: dealer1.account });
 
-      // Pool after excess: 400-100=300. eqStakes=100. distributable=200. fee=2. winnerPool=198.
+      // Pool=400M-95918368-100M=204081632. fee=2040816. winnerPool=202040816.
       const d2Before = await stakeToken.read.balanceOf([dealer2.account.address]);
       await market.write.claimWinnings([marketId], { account: dealer2.account });
       const d2After = await stakeToken.read.balanceOf([dealer2.account.address]);
-      expect(d2After - d2Before).to.equal(toUSDC("198"));
+      expect(d2After - d2Before).to.equal(202040816n);
 
       // Equilibrium bettor gets full $100 refund
       const p3Before = await stakeToken.read.balanceOf([predictor3.account.address]);
@@ -1308,7 +1377,7 @@ describe("Equilibrium algorithm (USDC)", function () {
       const p1Before = await stakeToken.read.balanceOf([predictor1.account.address]);
       await market.write.claimLockRefund([marketId], { account: predictor1.account });
       const p1After = await stakeToken.read.balanceOf([predictor1.account.address]);
-      expect(p1After - p1Before).to.equal(toUSDC("50"));
+      expect(p1After - p1Before).to.equal(47959184n);
     });
 
     it("K4: conservation of value — all payouts + refunds + fees = total pool", async function () {
@@ -1316,7 +1385,11 @@ describe("Equilibrium algorithm (USDC)", function () {
         await setupMarket();
 
       // bet(20,$200) + bet(50,$100) + bet(80,$200). Force eq=50.
-      // below=200, above=200. Balanced! Eq bettor ($100) gets full refund.
+      // isExact: bets at 50=100, neg(20)=200>0, pos(80)=200>0. Exact!
+      // neg=200, pos=200. pNeg=49, pPos=51.
+      // left=51*200=10200, right=49*200=9800. pos overweight.
+      // targetPos=floor(200*49/51)=192. excess=8. eqAmt=100.
+      // pool=500-8-100=392. fee=3(dealer=1,sys=2). winnerPool=389.
       await market.write.placePrediction([marketId, 20n, toUSDC("200")], {
         account: predictor1.account,
       });
@@ -1333,11 +1406,17 @@ describe("Equilibrium algorithm (USDC)", function () {
       await market.write.resolveMarket([marketId, true], { account: dealer1.account });
 
       // Collect all outputs
-      // Winner: predictor3 (80%, above eq)
+      // Winner: predictor3 (80%, above eq). effective=200-8=192. payout=389.
       const winnerBefore = await stakeToken.read.balanceOf([predictor3.account.address]);
       await market.write.claimWinnings([marketId], { account: predictor3.account });
       const winnerAfter = await stakeToken.read.balanceOf([predictor3.account.address]);
       const winnerPayout = winnerAfter - winnerBefore;
+
+      // Lock refund for predictor3 (pos, overweight): 8
+      const lockBefore = await stakeToken.read.balanceOf([predictor3.account.address]);
+      await market.write.claimLockRefund([marketId], { account: predictor3.account });
+      const lockAfter = await stakeToken.read.balanceOf([predictor3.account.address]);
+      const lockRefund = lockAfter - lockBefore;
 
       // Eq refund: predictor2
       const eqBefore = await stakeToken.read.balanceOf([predictor2.account.address]);
@@ -1358,9 +1437,9 @@ describe("Equilibrium algorithm (USDC)", function () {
       const ownerAfter = await stakeToken.read.balanceOf([owner.account.address]);
       const systemFee = ownerAfter - ownerBefore;
 
-      // Total out = winnerPayout + eqRefund + dealerFee + systemFee
+      // Total out = winnerPayout + lockRefund + eqRefund + dealerFee + systemFee
       // Loser (predictor1) gets nothing. Total pool was 500.
-      const totalOut = winnerPayout + eqRefund + dealerFee + systemFee;
+      const totalOut = winnerPayout + lockRefund + eqRefund + dealerFee + systemFee;
       expect(totalOut).to.equal(toUSDC("500"));
     });
 
@@ -1368,7 +1447,9 @@ describe("Equilibrium algorithm (USDC)", function () {
       const { market, dealer1, dealer2, predictor1, predictor2, predictor3, stakeToken, marketId } =
         await setupMarket();
 
-      // eq=50 (symmetric). Pool=400, balanced.
+      // New formula: gap at g=1. neg=200(0+0), pos=200(100+100).
+      // (2)*200=400 vs (1)*200=200. pos overweight.
+      // targetPos=floor(200*1/2)=100. excess=100. pool=300.
       await market.write.placePrediction([marketId, 0n, toUSDC("100")], {
         account: predictor1.account,
       });
@@ -1386,29 +1467,32 @@ describe("Equilibrium algorithm (USDC)", function () {
       await market.write.lockMarket([marketId]);
 
       const data = await market.read.markets([marketId]);
-      expect(data[10]).to.equal(50n);
+      expect(data[10]).to.equal(1n);
 
       // Resolve above: 100% bettors win
       await market.write.resolveMarket([marketId, true], { account: dealer1.account });
 
-      // Pool=400, fee=4, winnerPool=396. Two winners ($100 each). Each: 198.
+      // Pool=300M, fee=3M, winnerPool=297M.
+      // Each winner effective=100M-50M=50M. totalWin=100M.
+      // Each payout: 50M*297M/100M=148500000.
       const p3Before = await stakeToken.read.balanceOf([predictor3.account.address]);
       await market.write.claimWinnings([marketId], { account: predictor3.account });
       const p3After = await stakeToken.read.balanceOf([predictor3.account.address]);
-      expect(p3After - p3Before).to.equal(toUSDC("198"));
+      expect(p3After - p3Before).to.equal(148500000n);
 
       const d2Before = await stakeToken.read.balanceOf([dealer2.account.address]);
       await market.write.claimWinnings([marketId], { account: dealer2.account });
       const d2After = await stakeToken.read.balanceOf([dealer2.account.address]);
-      expect(d2After - d2Before).to.equal(toUSDC("198"));
+      expect(d2After - d2Before).to.equal(148500000n);
     });
 
     it("K6: unequal amounts at 0% and 100% — asymmetric equilibrium", async function () {
       const { market, dealer1, predictor1, predictor2, marketId } =
         await setupMarket();
 
-      // bet(0,$500) + bet(100,$100). Eq: |500*(100-p)-100*p|=|50000-600p|. Zero at ~83.
-      // p=83: diff=|50000-49800|=200. p=84: diff=400. Eq=83.
+      // bet(0,$500) + bet(100,$100). New formula: gap at g=1.
+      // neg=500(at 0), pos=100(at 100). (2)*100=200 vs (1)*500=500. diff=300.
+      // Same diff at all g. g=1 found first.
       await market.write.placePrediction([marketId, 0n, toUSDC("500")], {
         account: predictor1.account,
       });
@@ -1419,15 +1503,16 @@ describe("Equilibrium algorithm (USDC)", function () {
       await advanceTime(86401);
 
       const eq = await market.read.calculateEquilibrium([marketId]);
-      expect(eq).to.equal(83n);
+      expect(eq).to.equal(1n);
 
       await market.write.lockMarket([marketId]);
 
-      // Below overweight: leftSide=500*17=8500 > rightSide=100*83=8300
-      // predictor1 gets small lock refund (below is heavier)
+      // pNeg=1, pPos=2. left=200, right=500. neg overweight.
+      // targetNeg=floor(100*2/1)=200. excess=300.
+      // predictor1 (neg, overweight): refund=floor(500*300/500)=300
       const refund1 = await market.read.getLockRefundAmount([marketId, predictor1.account.address]);
       expect(refund1 > 0n).to.be.true;
-      // predictor2 gets nothing
+      // predictor2 (pos, not overweight): no refund
       expect(await market.read.getLockRefundAmount([marketId, predictor2.account.address])).to.equal(0n);
 
       // Resolve below eq → predictor1 wins
