@@ -267,6 +267,30 @@ contract OracleResolver is
     }
 
     /**
+     * @notice Register an oracle for a market (called by PredictionMarket during market creation)
+     * @param oracleId Oracle identifier to register
+     * @dev Skips silently if already registered. Only callable by PredictionMarket or owner.
+     */
+    function registerOracleForMarket(bytes32 oracleId) external {
+        require(
+            msg.sender == predictionMarket || msg.sender == owner(),
+            "Not authorized"
+        );
+        if (oracles[oracleId].isActive) return;
+
+        oracles[oracleId] = OracleConfig({
+            oracleType: OracleType.CustomData,
+            dataSource: address(0),
+            minValue: 0,
+            maxValue: 1,
+            stalePeriod: 365 days,
+            isActive: true
+        });
+
+        emit OracleRegistered(oracleId, OracleType.CustomData, address(0), 0, 1);
+    }
+
+    /**
      * @notice Authorize/deauthorize an updater
      * @param updater Address to authorize
      * @param authorized Whether to authorize or deauthorize

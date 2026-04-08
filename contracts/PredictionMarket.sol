@@ -330,6 +330,11 @@ contract PredictionMarket is
         marketCounter++;
         uint256 marketId = marketCounter;
 
+        // Auto-register oracle if oracleId is provided
+        if (oracleId != bytes32(0)) {
+            oracleResolver.registerOracleForMarket(oracleId);
+        }
+
         markets[marketId] = Market({
             dealer: msg.sender,
             tokenId: tokenId,

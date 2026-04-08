@@ -12,13 +12,14 @@
         "upgradedAt": "2026-03-15T00:00:00.000Z"
       },
       "oracleResolver": {
-        "implementation": "0xade1743f9aae340efcc133b4e85488c92be4d362",
-        "proxy": "0xa926f2087c7fa88542674fd75204d3c6e146d9d2"
+        "implementation": "0x0fd15e05e27496c547c9fa8a974c1c97212ba075",
+        "proxy": "0xa926f2087c7fa88542674fd75204d3c6e146d9d2",
+        "upgradedAt": "2026-04-08T20:15:26.694Z"
       },
       "predictionMarket": {
-        "implementation": "0x8719f6bb2baaed037f0b44f864011a1833b2cd3b",
+        "implementation": "0x3f8a5b2fd59536adfdcb610e8288a29aacb6cb52",
         "proxy": "0x409464d2e712ffc7e64baa191cac65c731581f05",
-        "upgradedAt": "2026-04-07T19:21:27.110Z"
+        "upgradedAt": "2026-04-08T20:15:51.637Z"
       }
     }
   }
