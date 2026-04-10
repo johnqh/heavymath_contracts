@@ -233,6 +233,14 @@ contract PredictionMarket is
     }
 
     /**
+     * @notice Set the authorized resolver address (owner only)
+     * @param _resolver Address authorized to resolve oracle markets directly
+     */
+    function setAuthorizedResolver(address _resolver) external onlyOwner {
+        authorizedResolver = _resolver;
+    }
+
+    /**
      * @notice Set the winner fee in basis points (owner only)
      * @param _winnerFeeBps Fee in basis points (e.g. 100 = 1%)
      */
@@ -581,11 +589,30 @@ contract PredictionMarket is
     }
 
     /**
+     * @notice Resolve a locked oracle market with a binary outcome (authorized resolver only)
+     * @param marketId Market ID
+     * @param positiveOutcome true = positive (above equilibrium) side wins, false = negative (below) wins
+     * @dev The authorized resolver computes the game result off-chain (via sports API)
+     *      and submits the outcome directly. No OracleResolver interaction needed.
+     */
+    function resolveMarketByResolver(uint256 marketId, bool positiveOutcome) external {
+        require(msg.sender == authorizedResolver || msg.sender == owner(), "Not authorized resolver");
+        Market storage market = markets[marketId];
+        require(market.status == MarketStatus.Locked, "Market not locked");
+        require(market.oracleId != bytes32(0), "Not an oracle market");
+
+        market.status = MarketStatus.Resolved;
+        market.positiveOutcome = positiveOutcome;
+
+        emit MarketResolved(marketId, positiveOutcome, market.equilibrium);
+    }
+
+    /**
      * @notice Resolve a locked market using oracle data (anyone can call)
      * @param marketId Market ID
      * @dev Oracle returns a percentage (0-100). If it is above the equilibrium,
      *      the positive side wins; otherwise the negative side wins.
-     * @dev DEPRECATED: Use requestOracleResolution + completeOracleResolution for Chainlink flow
+     * @dev DEPRECATED: Use resolveMarketByResolver for authorized resolver flow
      */
     function resolveMarketWithOracle(uint256 marketId) external {
         Market storage market = markets[marketId];
@@ -1283,8 +1310,11 @@ contract PredictionMarket is
     /// @notice When true, markets can be locked/resolved without waiting for the deadline
     bool public testMode;
 
+    /// @notice Authorized resolver address (can resolve oracle markets directly)
+    address public authorizedResolver;
+
     /**
-     * @dev Storage gap for future upgrades (reduced from 48 to 45)
+     * @dev Storage gap for future upgrades (reduced from 45 to 44)
      */
-    uint256[45] private __gap;
+    uint256[44] private __gap;
 }

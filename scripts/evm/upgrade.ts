@@ -28,22 +28,32 @@ async function main() {
     );
   }
 
-  const validContracts = ['PredictionMarket', 'DealerNFT', 'OracleResolver'] as const;
+  const validContracts = [
+    'PredictionMarket',
+    'DealerNFT',
+    'OracleResolver',
+  ] as const;
   for (const name of upgradeList) {
     if (!validContracts.includes(name as (typeof validContracts)[number])) {
-      throw new Error(`Unknown contract: ${name}. Valid: ${validContracts.join(', ')}`);
+      throw new Error(
+        `Unknown contract: ${name}. Valid: ${validContracts.join(', ')}`
+      );
     }
   }
 
   // Load DEPLOYED.json
   const deploymentsPath = path.join(process.cwd(), 'DEPLOYED.json');
   if (!fs.existsSync(deploymentsPath)) {
-    throw new Error('DEPLOYED.json not found. Deploy first with bun run deploy:evm:sepolia');
+    throw new Error(
+      'DEPLOYED.json not found. Deploy first with bun run deploy:evm:sepolia'
+    );
   }
   const deployments = JSON.parse(fs.readFileSync(deploymentsPath, 'utf-8'));
   const networkDeployment = deployments.networks[networkName];
   if (!networkDeployment) {
-    throw new Error(`No deployment found for network "${networkName}" in DEPLOYED.json`);
+    throw new Error(
+      `No deployment found for network "${networkName}" in DEPLOYED.json`
+    );
   }
 
   const [deployer] = await viem.getWalletClients();
@@ -61,7 +71,9 @@ async function main() {
     const key = contractKeyMap[contractName];
     const entry = networkDeployment[key];
     if (!entry?.proxy) {
-      throw new Error(`No proxy address found for ${contractName} in DEPLOYED.json`);
+      throw new Error(
+        `No proxy address found for ${contractName} in DEPLOYED.json`
+      );
     }
 
     const proxyAddress = entry.proxy as `0x${string}`;
@@ -70,11 +82,16 @@ async function main() {
     console.log(`  Old impl: ${entry.implementation}`);
 
     // Deploy new implementation
-    const newImpl = await viem.deployContract(contractName as 'PredictionMarket');
+    const newImpl = await viem.deployContract(
+      contractName as 'PredictionMarket'
+    );
     console.log(`  New impl: ${newImpl.address}`);
 
     // Call upgradeToAndCall on the proxy (UUPS - the function lives on the implementation)
-    const proxy = await viem.getContractAt(contractName as 'PredictionMarket', proxyAddress);
+    const proxy = await viem.getContractAt(
+      contractName as 'PredictionMarket',
+      proxyAddress
+    );
     const hash = await proxy.write.upgradeToAndCall([newImpl.address, '0x'], {
       account: deployer.account,
     });
@@ -96,7 +113,7 @@ async function main() {
 
 main()
   .then(() => process.exit(0))
-  .catch((error) => {
+  .catch(error => {
     console.error(error);
     process.exit(1);
   });

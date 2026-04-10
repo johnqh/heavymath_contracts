@@ -2,1431 +2,1431 @@
 // Regenerate with: bun run compile:evm
 export const PREDICTION_MARKET_ABI = [
   {
-    "inputs": [],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
+    inputs: [],
+    stateMutability: 'nonpayable',
+    type: 'constructor',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "target",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'target',
+        type: 'address',
+      },
     ],
-    "name": "AddressEmptyCode",
-    "type": "error"
+    name: 'AddressEmptyCode',
+    type: 'error',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "implementation",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'implementation',
+        type: 'address',
+      },
     ],
-    "name": "ERC1967InvalidImplementation",
-    "type": "error"
+    name: 'ERC1967InvalidImplementation',
+    type: 'error',
   },
   {
-    "inputs": [],
-    "name": "ERC1967NonPayable",
-    "type": "error"
+    inputs: [],
+    name: 'ERC1967NonPayable',
+    type: 'error',
   },
   {
-    "inputs": [],
-    "name": "EnforcedPause",
-    "type": "error"
+    inputs: [],
+    name: 'EnforcedPause',
+    type: 'error',
   },
   {
-    "inputs": [],
-    "name": "ExpectedPause",
-    "type": "error"
+    inputs: [],
+    name: 'ExpectedPause',
+    type: 'error',
   },
   {
-    "inputs": [],
-    "name": "FailedCall",
-    "type": "error"
+    inputs: [],
+    name: 'FailedCall',
+    type: 'error',
   },
   {
-    "inputs": [],
-    "name": "InvalidInitialization",
-    "type": "error"
+    inputs: [],
+    name: 'InvalidInitialization',
+    type: 'error',
   },
   {
-    "inputs": [],
-    "name": "NotInitializing",
-    "type": "error"
+    inputs: [],
+    name: 'NotInitializing',
+    type: 'error',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "owner",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'owner',
+        type: 'address',
+      },
     ],
-    "name": "OwnableInvalidOwner",
-    "type": "error"
+    name: 'OwnableInvalidOwner',
+    type: 'error',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'account',
+        type: 'address',
+      },
     ],
-    "name": "OwnableUnauthorizedAccount",
-    "type": "error"
+    name: 'OwnableUnauthorizedAccount',
+    type: 'error',
   },
   {
-    "inputs": [],
-    "name": "ReentrancyGuardReentrantCall",
-    "type": "error"
+    inputs: [],
+    name: 'ReentrancyGuardReentrantCall',
+    type: 'error',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "token",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'token',
+        type: 'address',
+      },
     ],
-    "name": "SafeERC20FailedOperation",
-    "type": "error"
+    name: 'SafeERC20FailedOperation',
+    type: 'error',
   },
   {
-    "inputs": [],
-    "name": "UUPSUnauthorizedCallContext",
-    "type": "error"
+    inputs: [],
+    name: 'UUPSUnauthorizedCallContext',
+    type: 'error',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "bytes32",
-        "name": "slot",
-        "type": "bytes32"
-      }
+        internalType: 'bytes32',
+        name: 'slot',
+        type: 'bytes32',
+      },
     ],
-    "name": "UUPSUnsupportedProxiableUUID",
-    "type": "error"
+    name: 'UUPSUnsupportedProxiableUUID',
+    type: 'error',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
+        indexed: true,
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "dealer",
-        "type": "address"
+        indexed: true,
+        internalType: 'address',
+        name: 'dealer',
+        type: 'address',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
+        indexed: false,
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
+      },
     ],
-    "name": "DealerFeesWithdrawn",
-    "type": "event"
+    name: 'DealerFeesWithdrawn',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "oldPercent",
-        "type": "uint256"
+        indexed: false,
+        internalType: 'uint256',
+        name: 'oldPercent',
+        type: 'uint256',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "newPercent",
-        "type": "uint256"
-      }
+        indexed: false,
+        internalType: 'uint256',
+        name: 'newPercent',
+        type: 'uint256',
+      },
     ],
-    "name": "DealerSharePercentUpdated",
-    "type": "event"
+    name: 'DealerSharePercentUpdated',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": false,
-        "internalType": "uint64",
-        "name": "version",
-        "type": "uint64"
-      }
+        indexed: false,
+        internalType: 'uint64',
+        name: 'version',
+        type: 'uint64',
+      },
     ],
-    "name": "Initialized",
-    "type": "event"
+    name: 'Initialized',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
+        indexed: true,
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "predictor",
-        "type": "address"
+        indexed: true,
+        internalType: 'address',
+        name: 'predictor',
+        type: 'address',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
+        indexed: false,
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
+      },
     ],
-    "name": "LockRefundClaimed",
-    "type": "event"
+    name: 'LockRefundClaimed',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
-      }
+        indexed: true,
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
+      },
     ],
-    "name": "MarketAbandoned",
-    "type": "event"
+    name: 'MarketAbandoned',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
-      }
+        indexed: true,
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
+      },
     ],
-    "name": "MarketCancelled",
-    "type": "event"
+    name: 'MarketCancelled',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
+        indexed: true,
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "dealer",
-        "type": "address"
+        indexed: true,
+        internalType: 'address',
+        name: 'dealer',
+        type: 'address',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "tokenId",
-        "type": "uint256"
+        indexed: false,
+        internalType: 'uint256',
+        name: 'tokenId',
+        type: 'uint256',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "category",
-        "type": "uint256"
+        indexed: false,
+        internalType: 'uint256',
+        name: 'category',
+        type: 'uint256',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "subCategory",
-        "type": "uint256"
+        indexed: false,
+        internalType: 'uint256',
+        name: 'subCategory',
+        type: 'uint256',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "deadline",
-        "type": "uint256"
+        indexed: false,
+        internalType: 'uint256',
+        name: 'deadline',
+        type: 'uint256',
       },
       {
-        "indexed": false,
-        "internalType": "string",
-        "name": "description",
-        "type": "string"
-      }
+        indexed: false,
+        internalType: 'string',
+        name: 'description',
+        type: 'string',
+      },
     ],
-    "name": "MarketCreated",
-    "type": "event"
+    name: 'MarketCreated',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
+        indexed: true,
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "equilibrium",
-        "type": "uint256"
-      }
+        indexed: false,
+        internalType: 'uint256',
+        name: 'equilibrium',
+        type: 'uint256',
+      },
     ],
-    "name": "MarketLocked",
-    "type": "event"
+    name: 'MarketLocked',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
+        indexed: true,
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
       },
       {
-        "indexed": false,
-        "internalType": "bool",
-        "name": "positiveOutcome",
-        "type": "bool"
+        indexed: false,
+        internalType: 'bool',
+        name: 'positiveOutcome',
+        type: 'bool',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "equilibrium",
-        "type": "uint256"
-      }
+        indexed: false,
+        internalType: 'uint256',
+        name: 'equilibrium',
+        type: 'uint256',
+      },
     ],
-    "name": "MarketResolved",
-    "type": "event"
+    name: 'MarketResolved',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "previousOwner",
-        "type": "address"
+        indexed: true,
+        internalType: 'address',
+        name: 'previousOwner',
+        type: 'address',
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "newOwner",
-        "type": "address"
-      }
+        indexed: true,
+        internalType: 'address',
+        name: 'newOwner',
+        type: 'address',
+      },
     ],
-    "name": "OwnershipTransferred",
-    "type": "event"
+    name: 'OwnershipTransferred',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": false,
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      }
+        indexed: false,
+        internalType: 'address',
+        name: 'account',
+        type: 'address',
+      },
     ],
-    "name": "Paused",
-    "type": "event"
+    name: 'Paused',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
+        indexed: true,
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "predictor",
-        "type": "address"
+        indexed: true,
+        internalType: 'address',
+        name: 'predictor',
+        type: 'address',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
+        indexed: false,
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "percentage",
-        "type": "uint256"
-      }
+        indexed: false,
+        internalType: 'uint256',
+        name: 'percentage',
+        type: 'uint256',
+      },
     ],
-    "name": "PredictionPlaced",
-    "type": "event"
+    name: 'PredictionPlaced',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
+        indexed: true,
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "predictor",
-        "type": "address"
+        indexed: true,
+        internalType: 'address',
+        name: 'predictor',
+        type: 'address',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "newAmount",
-        "type": "uint256"
+        indexed: false,
+        internalType: 'uint256',
+        name: 'newAmount',
+        type: 'uint256',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "newPercentage",
-        "type": "uint256"
-      }
+        indexed: false,
+        internalType: 'uint256',
+        name: 'newPercentage',
+        type: 'uint256',
+      },
     ],
-    "name": "PredictionUpdated",
-    "type": "event"
+    name: 'PredictionUpdated',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
+        indexed: true,
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "predictor",
-        "type": "address"
+        indexed: true,
+        internalType: 'address',
+        name: 'predictor',
+        type: 'address',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
+        indexed: false,
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
+      },
     ],
-    "name": "RefundClaimed",
-    "type": "event"
+    name: 'RefundClaimed',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "recipient",
-        "type": "address"
+        indexed: true,
+        internalType: 'address',
+        name: 'recipient',
+        type: 'address',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
+        indexed: false,
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
+      },
     ],
-    "name": "SystemFeesWithdrawn",
-    "type": "event"
+    name: 'SystemFeesWithdrawn',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": false,
-        "internalType": "address",
-        "name": "account",
-        "type": "address"
-      }
+        indexed: false,
+        internalType: 'address',
+        name: 'account',
+        type: 'address',
+      },
     ],
-    "name": "Unpaused",
-    "type": "event"
+    name: 'Unpaused',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "implementation",
-        "type": "address"
-      }
+        indexed: true,
+        internalType: 'address',
+        name: 'implementation',
+        type: 'address',
+      },
     ],
-    "name": "Upgraded",
-    "type": "event"
+    name: 'Upgraded',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "oldBps",
-        "type": "uint256"
+        indexed: false,
+        internalType: 'uint256',
+        name: 'oldBps',
+        type: 'uint256',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "newBps",
-        "type": "uint256"
-      }
+        indexed: false,
+        internalType: 'uint256',
+        name: 'newBps',
+        type: 'uint256',
+      },
     ],
-    "name": "WinnerFeeBpsUpdated",
-    "type": "event"
+    name: 'WinnerFeeBpsUpdated',
+    type: 'event',
   },
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
+        indexed: true,
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "predictor",
-        "type": "address"
+        indexed: true,
+        internalType: 'address',
+        name: 'predictor',
+        type: 'address',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
+        indexed: false,
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
+      },
     ],
-    "name": "WinningsClaimed",
-    "type": "event"
+    name: 'WinningsClaimed',
+    type: 'event',
   },
   {
-    "inputs": [],
-    "name": "MIN_DURATION",
-    "outputs": [
+    inputs: [],
+    name: 'MIN_DURATION',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "RESOLUTION_GRACE_PERIOD",
-    "outputs": [
+    inputs: [],
+    name: 'RESOLUTION_GRACE_PERIOD',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "UPGRADE_INTERFACE_VERSION",
-    "outputs": [
+    inputs: [],
+    name: 'UPGRADE_INTERFACE_VERSION',
+    outputs: [
       {
-        "internalType": "string",
-        "name": "",
-        "type": "string"
-      }
+        internalType: 'string',
+        name: '',
+        type: 'string',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
+      },
     ],
-    "name": "abandonMarket",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    name: 'abandonMarket',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
+      },
     ],
-    "name": "calculateEquilibrium",
-    "outputs": [
+    name: 'calculateEquilibrium',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
       },
       {
-        "internalType": "address",
-        "name": "predictor",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'predictor',
+        type: 'address',
+      },
     ],
-    "name": "calculatePayout",
-    "outputs": [
+    name: 'calculatePayout',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
+      },
     ],
-    "name": "cancelMarket",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    name: 'cancelMarket',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
+      },
     ],
-    "name": "claimLockRefund",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    name: 'claimLockRefund',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
+      },
     ],
-    "name": "claimRefund",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    name: 'claimRefund',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
+      },
     ],
-    "name": "claimWinnings",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    name: 'claimWinnings',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "tokenId",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'tokenId',
+        type: 'uint256',
       },
       {
-        "internalType": "uint256",
-        "name": "category",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'category',
+        type: 'uint256',
       },
       {
-        "internalType": "uint256",
-        "name": "subCategory",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'subCategory',
+        type: 'uint256',
       },
       {
-        "internalType": "uint256",
-        "name": "deadline",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'deadline',
+        type: 'uint256',
       },
       {
-        "internalType": "string",
-        "name": "description",
-        "type": "string"
+        internalType: 'string',
+        name: 'description',
+        type: 'string',
       },
       {
-        "internalType": "bytes32",
-        "name": "oracleId",
-        "type": "bytes32"
-      }
+        internalType: 'bytes32',
+        name: 'oracleId',
+        type: 'bytes32',
+      },
     ],
-    "name": "createMarket",
-    "outputs": [
+    name: 'createMarket',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "name": "dealerFees",
-    "outputs": [
+    name: 'dealerFees',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "dealerNFT",
-    "outputs": [
+    inputs: [],
+    name: 'dealerNFT',
+    outputs: [
       {
-        "internalType": "contract DealerNFT",
-        "name": "",
-        "type": "address"
-      }
+        internalType: 'contract DealerNFT',
+        name: '',
+        type: 'address',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "dealerSharePercent",
-    "outputs": [
+    inputs: [],
+    name: 'dealerSharePercent',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
       },
       {
-        "internalType": "address",
-        "name": "predictor",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'predictor',
+        type: 'address',
+      },
     ],
-    "name": "getLockRefundAmount",
-    "outputs": [
+    name: 'getLockRefundAmount',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
       },
       {
-        "internalType": "address",
-        "name": "predictor",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'predictor',
+        type: 'address',
+      },
     ],
-    "name": "getRefundAmount",
-    "outputs": [
+    name: 'getRefundAmount',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "_dealerNFT",
-        "type": "address"
+        internalType: 'address',
+        name: '_dealerNFT',
+        type: 'address',
       },
       {
-        "internalType": "address",
-        "name": "_oracleResolver",
-        "type": "address"
+        internalType: 'address',
+        name: '_oracleResolver',
+        type: 'address',
       },
       {
-        "internalType": "address",
-        "name": "_stakeToken",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: '_stakeToken',
+        type: 'address',
+      },
     ],
-    "name": "initialize",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    name: 'initialize',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
       },
       {
-        "internalType": "address",
-        "name": "predictor",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'predictor',
+        type: 'address',
+      },
     ],
-    "name": "isWinner",
-    "outputs": [
+    name: 'isWinner',
+    outputs: [
       {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
+        internalType: 'bool',
+        name: '',
+        type: 'bool',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
+      },
     ],
-    "name": "lockMarket",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    name: 'lockMarket',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
       },
       {
-        "internalType": "uint256",
-        "name": "equilibrium",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'equilibrium',
+        type: 'uint256',
+      },
     ],
-    "name": "lockMarketWithEquilibrium",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    name: 'lockMarketWithEquilibrium',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
       },
       {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
     ],
-    "name": "lockRefundClaimed",
-    "outputs": [
+    name: 'lockRefundClaimed',
+    outputs: [
       {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
+        internalType: 'bool',
+        name: '',
+        type: 'bool',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "name": "lockRefunds",
-    "outputs": [
+    name: 'lockRefunds',
+    outputs: [
       {
-        "internalType": "bool",
-        "name": "overweightIsBelow",
-        "type": "bool"
+        internalType: 'bool',
+        name: 'overweightIsBelow',
+        type: 'bool',
       },
       {
-        "internalType": "uint256",
-        "name": "excessAmount",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'excessAmount',
+        type: 'uint256',
       },
       {
-        "internalType": "uint256",
-        "name": "overweightTotal",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'overweightTotal',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "marketCounter",
-    "outputs": [
+    inputs: [],
+    name: 'marketCounter',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "name": "marketPools",
-    "outputs": [
+    name: 'marketPools',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "name": "markets",
-    "outputs": [
+    name: 'markets',
+    outputs: [
       {
-        "internalType": "address",
-        "name": "dealer",
-        "type": "address"
+        internalType: 'address',
+        name: 'dealer',
+        type: 'address',
       },
       {
-        "internalType": "uint256",
-        "name": "tokenId",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'tokenId',
+        type: 'uint256',
       },
       {
-        "internalType": "uint256",
-        "name": "category",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'category',
+        type: 'uint256',
       },
       {
-        "internalType": "uint256",
-        "name": "subCategory",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'subCategory',
+        type: 'uint256',
       },
       {
-        "internalType": "uint256",
-        "name": "deadline",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'deadline',
+        type: 'uint256',
       },
       {
-        "internalType": "string",
-        "name": "description",
-        "type": "string"
+        internalType: 'string',
+        name: 'description',
+        type: 'string',
       },
       {
-        "internalType": "uint256",
-        "name": "createdAt",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'createdAt',
+        type: 'uint256',
       },
       {
-        "internalType": "uint256",
-        "name": "dealerFeeBps",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'dealerFeeBps',
+        type: 'uint256',
       },
       {
-        "internalType": "enum PredictionMarket.MarketStatus",
-        "name": "status",
-        "type": "uint8"
+        internalType: 'enum PredictionMarket.MarketStatus',
+        name: 'status',
+        type: 'uint8',
       },
       {
-        "internalType": "bool",
-        "name": "positiveOutcome",
-        "type": "bool"
+        internalType: 'bool',
+        name: 'positiveOutcome',
+        type: 'bool',
       },
       {
-        "internalType": "uint256",
-        "name": "equilibrium",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'equilibrium',
+        type: 'uint256',
       },
       {
-        "internalType": "bytes32",
-        "name": "oracleId",
-        "type": "bytes32"
-      }
+        internalType: 'bytes32',
+        name: 'oracleId',
+        type: 'bytes32',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "oracleResolver",
-    "outputs": [
+    inputs: [],
+    name: 'oracleResolver',
+    outputs: [
       {
-        "internalType": "contract OracleResolver",
-        "name": "",
-        "type": "address"
-      }
+        internalType: 'contract OracleResolver',
+        name: '',
+        type: 'address',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "owner",
-    "outputs": [
+    inputs: [],
+    name: 'owner',
+    outputs: [
       {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "pause",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    inputs: [],
+    name: 'pause',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "paused",
-    "outputs": [
+    inputs: [],
+    name: 'paused',
+    outputs: [
       {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
+        internalType: 'bool',
+        name: '',
+        type: 'bool',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
       },
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "name": "percentageTotals",
-    "outputs": [
+    name: 'percentageTotals',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
       },
       {
-        "internalType": "uint256",
-        "name": "percentage",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'percentage',
+        type: 'uint256',
       },
       {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
+      },
     ],
-    "name": "placePrediction",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    name: 'placePrediction',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
       },
       {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
     ],
-    "name": "predictions",
-    "outputs": [
+    name: 'predictions',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
       },
       {
-        "internalType": "uint256",
-        "name": "percentage",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'percentage',
+        type: 'uint256',
       },
       {
-        "internalType": "uint256",
-        "name": "placedAt",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'placedAt',
+        type: 'uint256',
       },
       {
-        "internalType": "bool",
-        "name": "claimed",
-        "type": "bool"
-      }
+        internalType: 'bool',
+        name: 'claimed',
+        type: 'bool',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "proxiableUUID",
-    "outputs": [
+    inputs: [],
+    name: 'proxiableUUID',
+    outputs: [
       {
-        "internalType": "bytes32",
-        "name": "",
-        "type": "bytes32"
-      }
+        internalType: 'bytes32',
+        name: '',
+        type: 'bytes32',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "renounceOwnership",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    inputs: [],
+    name: 'renounceOwnership',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
       },
       {
-        "internalType": "bool",
-        "name": "positiveOutcome",
-        "type": "bool"
-      }
+        internalType: 'bool',
+        name: 'positiveOutcome',
+        type: 'bool',
+      },
     ],
-    "name": "resolveMarket",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    name: 'resolveMarket',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
+      },
     ],
-    "name": "resolveMarketWithOracle",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    name: 'resolveMarketWithOracle',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "_dealerSharePercent",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '_dealerSharePercent',
+        type: 'uint256',
+      },
     ],
-    "name": "setDealerSharePercent",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    name: 'setDealerSharePercent',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "_winnerFeeBps",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '_winnerFeeBps',
+        type: 'uint256',
+      },
     ],
-    "name": "setWinnerFeeBps",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    name: 'setWinnerFeeBps',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "bool",
-        "name": "_testMode",
-        "type": "bool"
-      }
+        internalType: 'bool',
+        name: '_testMode',
+        type: 'bool',
+      },
     ],
-    "name": "setTestMode",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    name: 'setTestMode',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "stakeToken",
-    "outputs": [
+    inputs: [],
+    name: 'stakeToken',
+    outputs: [
       {
-        "internalType": "contract IERC20",
-        "name": "",
-        "type": "address"
-      }
+        internalType: 'contract IERC20',
+        name: '',
+        type: 'address',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "testMode",
-    "outputs": [
+    inputs: [],
+    name: 'testMode',
+    outputs: [
       {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
+        internalType: 'bool',
+        name: '',
+        type: 'bool',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "name": "systemFees",
-    "outputs": [
+    name: 'systemFees',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "totalSystemFees",
-    "outputs": [
+    inputs: [],
+    name: 'totalSystemFees',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "newOwner",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'newOwner',
+        type: 'address',
+      },
     ],
-    "name": "transferOwnership",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    name: 'transferOwnership',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "unpause",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    inputs: [],
+    name: 'unpause',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
       },
       {
-        "internalType": "uint256",
-        "name": "newPercentage",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'newPercentage',
+        type: 'uint256',
       },
       {
-        "internalType": "uint256",
-        "name": "additionalAmount",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'additionalAmount',
+        type: 'uint256',
+      },
     ],
-    "name": "updatePrediction",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    name: 'updatePrediction',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "newImplementation",
-        "type": "address"
+        internalType: 'address',
+        name: 'newImplementation',
+        type: 'address',
       },
       {
-        "internalType": "bytes",
-        "name": "data",
-        "type": "bytes"
-      }
+        internalType: 'bytes',
+        name: 'data',
+        type: 'bytes',
+      },
     ],
-    "name": "upgradeToAndCall",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
+    name: 'upgradeToAndCall',
+    outputs: [],
+    stateMutability: 'payable',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "winnerFeeBps",
-    "outputs": [
+    inputs: [],
+    name: 'winnerFeeBps',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
+      },
     ],
-    "name": "withdrawDealerFees",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    name: 'withdrawDealerFees',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "uint256",
-        "name": "marketId",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
+      },
     ],
-    "name": "withdrawPrediction",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    name: 'withdrawPrediction',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [],
-    "name": "withdrawSystemFees",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
+    inputs: [],
+    name: 'withdrawSystemFees',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
 ] as const;

@@ -1,6 +1,13 @@
-import type { Abi, Address, Chain, Hash, PublicClient, WalletClient } from "viem";
-import { erc20Abi, getAddress } from "viem";
-import { PREDICTION_MARKET_ABI as ABI } from "./prediction-market-abi.js";
+import type {
+  Abi,
+  Address,
+  Chain,
+  Hash,
+  PublicClient,
+  WalletClient,
+} from 'viem';
+import { erc20Abi, getAddress } from 'viem';
+import { PREDICTION_MARKET_ABI as ABI } from './prediction-market-abi.js';
 
 const PREDICTION_MARKET_ABI = ABI as Abi;
 
@@ -46,7 +53,7 @@ export class EVMPredictionClient {
   private ensureAccount(wallet: WalletContext): Address {
     const account = wallet.walletClient.account?.address;
     if (!account) {
-      throw new Error("Wallet client is not configured with an account");
+      throw new Error('Wallet client is not configured with an account');
     }
     return getAddress(account);
   }
@@ -56,7 +63,7 @@ export class EVMPredictionClient {
       return wallet.publicClient;
     }
     throw new Error(
-      "A viem PublicClient is required for this operation. Provide wallet.publicClient."
+      'A viem PublicClient is required for this operation. Provide wallet.publicClient.'
     );
   }
 
@@ -71,7 +78,7 @@ export class EVMPredictionClient {
     const address = (await publicClient.readContract({
       address: this.predictionMarketAddress(),
       abi: this.abi,
-      functionName: "stakeToken",
+      functionName: 'stakeToken',
     })) as Address;
     this.stakeTokenCache = getAddress(address);
     return this.stakeTokenCache;
@@ -91,7 +98,7 @@ export class EVMPredictionClient {
     const currentAllowance = (await publicClient.readContract({
       address: token,
       abi: erc20Abi,
-      functionName: "allowance",
+      functionName: 'allowance',
       args: [owner, spender],
     })) as bigint;
     if (currentAllowance >= amount) {
@@ -100,7 +107,7 @@ export class EVMPredictionClient {
     await wallet.walletClient.writeContract({
       address: token,
       abi: erc20Abi,
-      functionName: "approve",
+      functionName: 'approve',
       args: [spender, amount],
       chain: wallet.chain || null,
       account: wallet.walletClient.account || null,
@@ -136,8 +143,8 @@ export class EVMPredictionClient {
   ): Promise<TransactionResult> {
     const oracle =
       params.oracleId ??
-      "0x0000000000000000000000000000000000000000000000000000000000000000";
-    return this.execute(wallet, "createMarket", [
+      '0x0000000000000000000000000000000000000000000000000000000000000000';
+    return this.execute(wallet, 'createMarket', [
       params.tokenId,
       params.category,
       params.subCategory,
@@ -151,21 +158,21 @@ export class EVMPredictionClient {
     wallet: WalletContext,
     testMode: boolean
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "setTestMode", [testMode]);
+    return this.execute(wallet, 'setTestMode', [testMode]);
   }
 
   async setWinnerFeeBps(
     wallet: WalletContext,
     feeBps: bigint
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "setWinnerFeeBps", [feeBps]);
+    return this.execute(wallet, 'setWinnerFeeBps', [feeBps]);
   }
 
   async setDealerSharePercent(
     wallet: WalletContext,
     percent: bigint
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "setDealerSharePercent", [percent]);
+    return this.execute(wallet, 'setDealerSharePercent', [percent]);
   }
 
   async placePrediction(
@@ -175,10 +182,10 @@ export class EVMPredictionClient {
     amount: bigint
   ): Promise<TransactionResult> {
     if (!Number.isInteger(percentage) || percentage < 0 || percentage > 100) {
-      throw new Error("percentage must be an integer between 0 and 100");
+      throw new Error('percentage must be an integer between 0 and 100');
     }
     await this.ensureAllowance(wallet, amount);
-    return this.execute(wallet, "placePrediction", [
+    return this.execute(wallet, 'placePrediction', [
       marketId,
       BigInt(percentage),
       amount,
@@ -191,13 +198,17 @@ export class EVMPredictionClient {
     newPercentage: number,
     additionalAmount: bigint
   ): Promise<TransactionResult> {
-    if (!Number.isInteger(newPercentage) || newPercentage < 0 || newPercentage > 100) {
-      throw new Error("newPercentage must be an integer between 0 and 100");
+    if (
+      !Number.isInteger(newPercentage) ||
+      newPercentage < 0 ||
+      newPercentage > 100
+    ) {
+      throw new Error('newPercentage must be an integer between 0 and 100');
     }
     if (additionalAmount > 0n) {
       await this.ensureAllowance(wallet, additionalAmount);
     }
-    return this.execute(wallet, "updatePrediction", [
+    return this.execute(wallet, 'updatePrediction', [
       marketId,
       BigInt(newPercentage),
       additionalAmount,
@@ -208,21 +219,21 @@ export class EVMPredictionClient {
     wallet: WalletContext,
     marketId: bigint
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "withdrawPrediction", [marketId]);
+    return this.execute(wallet, 'withdrawPrediction', [marketId]);
   }
 
   async cancelMarket(
     wallet: WalletContext,
     marketId: bigint
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "cancelMarket", [marketId]);
+    return this.execute(wallet, 'cancelMarket', [marketId]);
   }
 
   async abandonMarket(
     wallet: WalletContext,
     marketId: bigint
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "abandonMarket", [marketId]);
+    return this.execute(wallet, 'abandonMarket', [marketId]);
   }
 
   async resolveMarket(
@@ -230,14 +241,14 @@ export class EVMPredictionClient {
     marketId: bigint,
     positiveOutcome: boolean
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "resolveMarket", [marketId, positiveOutcome]);
+    return this.execute(wallet, 'resolveMarket', [marketId, positiveOutcome]);
   }
 
   async lockMarket(
     wallet: WalletContext,
     marketId: bigint
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "lockMarket", [marketId]);
+    return this.execute(wallet, 'lockMarket', [marketId]);
   }
 
   async lockMarketWithEquilibrium(
@@ -245,7 +256,7 @@ export class EVMPredictionClient {
     marketId: bigint,
     equilibrium: bigint
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "lockMarketWithEquilibrium", [
+    return this.execute(wallet, 'lockMarketWithEquilibrium', [
       marketId,
       equilibrium,
     ]);
@@ -255,7 +266,7 @@ export class EVMPredictionClient {
     wallet: WalletContext,
     marketId: bigint
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "resolveMarketWithOracle", [marketId]);
+    return this.execute(wallet, 'resolveMarketWithOracle', [marketId]);
   }
 
   /**
@@ -267,7 +278,7 @@ export class EVMPredictionClient {
     wallet: WalletContext,
     marketId: bigint
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "requestOracleResolution", [marketId]);
+    return this.execute(wallet, 'requestOracleResolution', [marketId]);
   }
 
   /**
@@ -278,14 +289,14 @@ export class EVMPredictionClient {
     wallet: WalletContext,
     marketId: bigint
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "completeOracleResolution", [marketId]);
+    return this.execute(wallet, 'completeOracleResolution', [marketId]);
   }
 
   async claimLockRefund(
     wallet: WalletContext,
     marketId: bigint
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "claimLockRefund", [marketId]);
+    return this.execute(wallet, 'claimLockRefund', [marketId]);
   }
 
   async getLockRefundAmount(
@@ -296,7 +307,7 @@ export class EVMPredictionClient {
     return (await publicClient.readContract({
       address: this.predictionMarketAddress(),
       abi: this.abi,
-      functionName: "getLockRefundAmount",
+      functionName: 'getLockRefundAmount',
       args: [marketId, predictor],
     })) as bigint;
   }
@@ -305,27 +316,25 @@ export class EVMPredictionClient {
     wallet: WalletContext,
     marketId: bigint
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "claimWinnings", [marketId]);
+    return this.execute(wallet, 'claimWinnings', [marketId]);
   }
 
   async claimRefund(
     wallet: WalletContext,
     marketId: bigint
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "claimRefund", [marketId]);
+    return this.execute(wallet, 'claimRefund', [marketId]);
   }
 
   async withdrawDealerFees(
     wallet: WalletContext,
     marketId: bigint
   ): Promise<TransactionResult> {
-    return this.execute(wallet, "withdrawDealerFees", [marketId]);
+    return this.execute(wallet, 'withdrawDealerFees', [marketId]);
   }
 
-  async withdrawSystemFees(
-    wallet: WalletContext
-  ): Promise<TransactionResult> {
-    return this.execute(wallet, "withdrawSystemFees", []);
+  async withdrawSystemFees(wallet: WalletContext): Promise<TransactionResult> {
+    return this.execute(wallet, 'withdrawSystemFees', []);
   }
 
   async getMarket(
@@ -335,7 +344,7 @@ export class EVMPredictionClient {
     const raw = await publicClient.readContract({
       address: this.predictionMarketAddress(),
       abi: this.abi,
-      functionName: "markets",
+      functionName: 'markets',
       args: [marketId],
     });
     return formatMarket(raw as readonly unknown[]);
@@ -349,7 +358,7 @@ export class EVMPredictionClient {
     const raw = (await publicClient.readContract({
       address: this.predictionMarketAddress(),
       abi: this.abi,
-      functionName: "predictions",
+      functionName: 'predictions',
       args: [marketId, account],
     })) as readonly [bigint, bigint, bigint, boolean];
     return {

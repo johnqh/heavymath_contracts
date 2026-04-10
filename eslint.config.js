@@ -1,52 +1,52 @@
-import typescriptEslint from "@typescript-eslint/eslint-plugin";
-import tsParser from "@typescript-eslint/parser";
+import typescriptEslint from '@typescript-eslint/eslint-plugin';
+import tsParser from '@typescript-eslint/parser';
 
 export default [
   {
-    files: ["**/*.ts", "**/*.js"],
+    files: ['**/*.ts', '**/*.js'],
     languageOptions: {
       parser: tsParser,
       ecmaVersion: 2022,
-      sourceType: "module",
+      sourceType: 'module',
       globals: {
-        console: "readonly",
-        process: "readonly",
-        Buffer: "readonly",
-        __dirname: "readonly",
-        __filename: "readonly",
+        console: 'readonly',
+        process: 'readonly',
+        Buffer: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
       },
     },
     plugins: {
-      "@typescript-eslint": typescriptEslint,
+      '@typescript-eslint': typescriptEslint,
     },
     rules: {
-      "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/no-unused-vars": [
-        "warn",
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
         {
-          argsIgnorePattern: "^_",
-          varsIgnorePattern: "^_",
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
         },
       ],
-      "no-console": "off",
-      "prefer-const": "warn",
+      'no-console': 'off',
+      'prefer-const': 'warn',
     },
   },
   {
-    files: ["test/**/*.ts"],
+    files: ['test/**/*.ts'],
     rules: {
-      "@typescript-eslint/no-explicit-any": "off",
+      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
   {
     ignores: [
-      "node_modules/",
-      "artifacts/",
-      "cache/",
-      "typechain-types/",
-      "dist/",
-      "coverage/",
-      "target/",
+      'node_modules/',
+      'artifacts/',
+      'cache/',
+      'typechain-types/',
+      'dist/',
+      'coverage/',
+      'target/',
     ],
   },
 ];

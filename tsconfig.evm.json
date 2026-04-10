@@ -4,14 +4,6 @@
     "outDir": "dist/evm",
     "noEmit": false
   },
-  "include": [
-    "src/evm/**/*",
-    "typechain-types/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "src/solana",
-    "src/unified"
-  ]
+  "include": ["src/evm/**/*", "typechain-types/**/*"],
+  "exclude": ["node_modules", "dist", "src/solana", "src/unified"]
 }

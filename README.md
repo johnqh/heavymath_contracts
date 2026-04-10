@@ -16,7 +16,7 @@ import { EVMPredictionClient } from '@sudobility/heavymath_contracts/evm';
 
 const client = new EVMPredictionClient({
   predictionMarket: '0x...',
-  stakeToken: '0x...',  // USDC address (optional, resolved on-chain)
+  stakeToken: '0x...', // USDC address (optional, resolved on-chain)
 });
 
 // Place a prediction (auto-approves ERC20)
@@ -24,7 +24,9 @@ await client.placePrediction(walletContext, marketId, 60, 1_000_000n);
 
 // Create a market (requires Dealer NFT)
 await client.createMarket(walletContext, {
-  tokenId: 1n, category: 1n, subCategory: 2n,
+  tokenId: 1n,
+  category: 1n,
+  subCategory: 2n,
   deadline: BigInt(Math.floor(Date.now() / 1000) + 86400),
   description: 'Team A wins',
 });
@@ -62,9 +64,9 @@ bun run deploy:evm:sepolia  # Deploy to Sepolia
 
 ## SDK Entry Points
 
-| Import | Description |
-|--------|-------------|
-| `@sudobility/heavymath_contracts` | Unified PredictionClient |
+| Import                                | Description                |
+| ------------------------------------- | -------------------------- |
+| `@sudobility/heavymath_contracts`     | Unified PredictionClient   |
 | `@sudobility/heavymath_contracts/evm` | EVMPredictionClient (viem) |
 
 ## Related Packages

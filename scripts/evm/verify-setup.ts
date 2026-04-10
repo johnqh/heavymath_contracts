@@ -36,7 +36,10 @@ async function main() {
   console.log('\nStep 2: PredictionMarket');
   console.log('  Address:', pmAddress);
   const step2Ok = pmAddress !== zero;
-  console.log('  Matches expected:', pmAddress.toLowerCase() === '0x409464d2e712ffc7e64baa191cac65c731581f05');
+  console.log(
+    '  Matches expected:',
+    pmAddress.toLowerCase() === '0x409464d2e712ffc7e64baa191cac65c731581f05'
+  );
   console.log('  Status:', step2Ok ? '✅ CONFIGURED' : '❌ NOT CONFIGURED');
 
   // Step 3: LINK balance
@@ -68,7 +71,10 @@ async function main() {
   console.log('\nOwnership:');
   console.log('  PredictionMarket owner:', pmOwner);
   console.log('  OracleResolver owner:', orOwner);
-  console.log('  Same owner:', pmOwner.toLowerCase() === orOwner.toLowerCase() ? '✅' : '⚠️ DIFFERENT');
+  console.log(
+    '  Same owner:',
+    pmOwner.toLowerCase() === orOwner.toLowerCase() ? '✅' : '⚠️ DIFFERENT'
+  );
 
   console.log('\n=== Overall ===');
   if (step1Ok && step2Ok && step3Ok) {

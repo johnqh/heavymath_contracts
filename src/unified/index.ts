@@ -5,7 +5,7 @@ import {
   type TransactionResult,
   type CreateMarketParams,
   type MarketState,
-} from "../evm";
+} from '../evm';
 
 /**
  * Unified prediction client

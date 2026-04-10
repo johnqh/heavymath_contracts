@@ -44,10 +44,12 @@ async function main() {
   console.log('✅ Proxy upgraded to new implementation');
 
   // 3. Set default permissions: SPORTS category (1) with all subcategories (0xFF)
-  await dealerNFT.write.setDefaultPermissions([1n, [0xFFn]], {
+  await dealerNFT.write.setDefaultPermissions([1n, [0xffn]], {
     account: deployer.account,
   });
-  console.log('🏷️  Default permissions set: category=1 (SPORTS), subcategories=[0xFF] (all)');
+  console.log(
+    '🏷️  Default permissions set: category=1 (SPORTS), subcategories=[0xFF] (all)'
+  );
 
   // 4. Update DEPLOYED.json
   networkDeployment.dealerNFT.implementation = newImpl.address;
@@ -60,7 +62,7 @@ async function main() {
 
 main()
   .then(() => process.exit(0))
-  .catch((error) => {
+  .catch(error => {
     console.error(error);
     process.exit(1);
   });

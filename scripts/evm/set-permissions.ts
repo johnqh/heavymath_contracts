@@ -5,10 +5,15 @@ async function main() {
   const { viem } = hre;
   const [deployer] = await viem.getWalletClients();
   const publicClient = await viem.getPublicClient();
-  const dealerNFT = await viem.getContractAt('DealerNFT', '0x62d545189b5caa014de27787f3d996e10c437e35');
+  const dealerNFT = await viem.getContractAt(
+    'DealerNFT',
+    '0x62d545189b5caa014de27787f3d996e10c437e35'
+  );
 
   console.log('Setting wildcard permissions for token 1...');
-  const hash = await dealerNFT.write.setPermissions([1n, 255n, [255n]], { account: deployer.account });
+  const hash = await dealerNFT.write.setPermissions([1n, 255n, [255n]], {
+    account: deployer.account,
+  });
   console.log('Tx:', hash);
   await publicClient.waitForTransactionReceipt({ hash });
 
@@ -17,4 +22,9 @@ async function main() {
   console.log('Done!');
 }
 
-main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });
+main()
+  .then(() => process.exit(0))
+  .catch(e => {
+    console.error(e);
+    process.exit(1);
+  });

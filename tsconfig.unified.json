@@ -12,10 +12,5 @@
     "src/solana/**/*",
     "src/react/**/*"
   ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "test/**/*",
-    "target/types/**/*"
-  ]
+  "exclude": ["node_modules", "dist", "test/**/*", "target/types/**/*"]
 }

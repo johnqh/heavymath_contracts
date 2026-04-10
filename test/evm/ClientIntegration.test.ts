@@ -1,28 +1,23 @@
-import { expect } from "chai";
-import { EVMPredictionClient } from "../../src/evm/index.ts";
+import { expect } from 'chai';
+import { EVMPredictionClient } from '../../src/evm/index.ts';
 import {
   advanceTime,
   deployPredictionFixture,
   toUSDC,
-} from "./utils/fixture.ts";
+} from './utils/fixture.ts';
 
 const ZERO_ORACLE_ID =
-  "0x0000000000000000000000000000000000000000000000000000000000000000";
+  '0x0000000000000000000000000000000000000000000000000000000000000000';
 
-describe("EVMPredictionClient integration", function () {
-  it("handles ERC20 approvals, placement, and withdrawals", async function () {
-    const {
-      market,
-      stakeToken,
-      dealer1,
-      predictor1,
-      publicClient,
-    } = await deployPredictionFixture();
+describe('EVMPredictionClient integration', function () {
+  it('handles ERC20 approvals, placement, and withdrawals', async function () {
+    const { market, stakeToken, dealer1, predictor1, publicClient } =
+      await deployPredictionFixture();
 
     const block = await publicClient.getBlock();
     const deadline = block.timestamp + 86401n;
     await market.write.createMarket(
-      [1n, 1n, 1n, deadline, "Client integration", ZERO_ORACLE_ID],
+      [1n, 1n, 1n, deadline, 'Client integration', ZERO_ORACLE_ID],
       { account: dealer1.account }
     );
 
@@ -40,14 +35,14 @@ describe("EVMPredictionClient integration", function () {
       { walletClient: predictor1, publicClient },
       1n,
       55,
-      toUSDC("25")
+      toUSDC('25')
     );
 
     const prediction = await market.read.predictions([
       1n,
       predictor1.account.address,
     ]);
-    expect(prediction[0]).to.equal(toUSDC("25"));
+    expect(prediction[0]).to.equal(toUSDC('25'));
 
     await client.withdrawPrediction({ walletClient: predictor1 }, 1n);
     const cleared = await market.read.predictions([
@@ -57,18 +52,14 @@ describe("EVMPredictionClient integration", function () {
     expect(cleared[0]).to.equal(0n);
   });
 
-  it("cancels and abandons markets through the client", async function () {
-    const {
-      market,
-      dealer1,
-      predictor1,
-      publicClient,
-    } = await deployPredictionFixture();
+  it('cancels and abandons markets through the client', async function () {
+    const { market, dealer1, predictor1, publicClient } =
+      await deployPredictionFixture();
 
     const block = await publicClient.getBlock();
     const deadline = block.timestamp + 86401n;
     await market.write.createMarket(
-      [1n, 1n, 1n, deadline, "Lifecycle client", ZERO_ORACLE_ID],
+      [1n, 1n, 1n, deadline, 'Lifecycle client', ZERO_ORACLE_ID],
       { account: dealer1.account }
     );
 
@@ -84,11 +75,11 @@ describe("EVMPredictionClient integration", function () {
     const freshBlock = await publicClient.getBlock();
     const newDeadline = freshBlock.timestamp + 86401n;
     await market.write.createMarket(
-      [1n, 1n, 1n, newDeadline, "Abandon via client", ZERO_ORACLE_ID],
+      [1n, 1n, 1n, newDeadline, 'Abandon via client', ZERO_ORACLE_ID],
       { account: dealer1.account }
     );
     const newMarketId = await market.read.marketCounter();
-    await market.write.placePrediction([newMarketId, 60n, toUSDC("10")], {
+    await market.write.placePrediction([newMarketId, 60n, toUSDC('10')], {
       account: predictor1.account,
     });
 

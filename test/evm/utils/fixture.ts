@@ -1,6 +1,6 @@
-import "@nomicfoundation/hardhat-viem";
-import hre from "hardhat";
-import { encodeFunctionData, parseAbi, parseUnits } from "viem";
+import '@nomicfoundation/hardhat-viem';
+import hre from 'hardhat';
+import { encodeFunctionData, parseAbi, parseUnits } from 'viem';
 
 const { viem, network } = hre;
 
@@ -12,56 +12,62 @@ export async function deployPredictionFixture() {
     await viem.getWalletClients();
   const publicClient = await viem.getPublicClient();
 
-  const dealerNFTImpl = await viem.deployContract("DealerNFT");
+  const dealerNFTImpl = await viem.deployContract('DealerNFT');
   const dealerNFTInitData = encodeFunctionData({
-    abi: parseAbi(["function initialize(uint256)"]),
-    functionName: "initialize",
+    abi: parseAbi(['function initialize(uint256)']),
+    functionName: 'initialize',
     args: [0n], // Free minting in tests
   });
-  const dealerNFTProxy = await viem.deployContract("ERC1967Proxy", [
+  const dealerNFTProxy = await viem.deployContract('ERC1967Proxy', [
     dealerNFTImpl.address,
     dealerNFTInitData,
   ]);
-  const dealerNFT = await viem.getContractAt("DealerNFT", dealerNFTProxy.address);
+  const dealerNFT = await viem.getContractAt(
+    'DealerNFT',
+    dealerNFTProxy.address
+  );
   // Mint dealer licenses (mintPrice=0 so no ETH needed)
   await dealerNFT.write.mint({ account: dealer1.account });
   await dealerNFT.write.mint({ account: dealer2.account });
-  await dealerNFT.write.setPermissions([1n, 1n, [0xFFn]]);
+  await dealerNFT.write.setPermissions([1n, 1n, [0xffn]]);
   await dealerNFT.write.setPermissions([2n, 1n, [1n, 2n]]);
 
-  const oracleImpl = await viem.deployContract("OracleResolver");
+  const oracleImpl = await viem.deployContract('OracleResolver');
   const oracleInitData = encodeFunctionData({
-    abi: parseAbi(["function initialize()"]),
-    functionName: "initialize",
+    abi: parseAbi(['function initialize()']),
+    functionName: 'initialize',
     args: [],
   });
-  const oracleProxy = await viem.deployContract("ERC1967Proxy", [
+  const oracleProxy = await viem.deployContract('ERC1967Proxy', [
     oracleImpl.address,
     oracleInitData,
   ]);
   const oracleResolver = await viem.getContractAt(
-    "OracleResolver",
+    'OracleResolver',
     oracleProxy.address
   );
 
-  const stakeToken = await viem.deployContract("MockUSDC");
+  const stakeToken = await viem.deployContract('MockUSDC');
 
-  const marketImpl = await viem.deployContract("PredictionMarket");
+  const marketImpl = await viem.deployContract('PredictionMarket');
   const marketInitData = encodeFunctionData({
-    abi: parseAbi(["function initialize(address,address,address)"]),
-    functionName: "initialize",
+    abi: parseAbi(['function initialize(address,address,address)']),
+    functionName: 'initialize',
     args: [dealerNFT.address, oracleResolver.address, stakeToken.address],
   });
-  const marketProxy = await viem.deployContract("ERC1967Proxy", [
+  const marketProxy = await viem.deployContract('ERC1967Proxy', [
     marketImpl.address,
     marketInitData,
   ]);
-  const market = await viem.getContractAt("PredictionMarket", marketProxy.address);
+  const market = await viem.getContractAt(
+    'PredictionMarket',
+    marketProxy.address
+  );
 
   // Register PredictionMarket as authorized caller on OracleResolver
   await oracleResolver.write.setPredictionMarket([market.address]);
 
-  const initialBalance = toUSDC("100000");
+  const initialBalance = toUSDC('100000');
   const wallets = [dealer1, dealer2, predictor1, predictor2, predictor3];
   for (const wallet of wallets) {
     await stakeToken.write.mint([wallet.account.address, initialBalance], {
@@ -88,6 +94,6 @@ export async function deployPredictionFixture() {
 }
 
 export async function advanceTime(seconds: number) {
-  await network.provider.send("evm_increaseTime", [seconds]);
-  await network.provider.send("evm_mine");
+  await network.provider.send('evm_increaseTime', [seconds]);
+  await network.provider.send('evm_mine');
 }

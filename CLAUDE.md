@@ -101,13 +101,13 @@ heavymath_contracts/
 
 The package has multiple entry points for different environments:
 
-| Import path | Condition | Output directory |
-|---|---|---|
-| `@sudobility/heavymath_contracts` | node/browser/default | `dist/unified/src/unified/` |
-| `@sudobility/heavymath_contracts` | react-native | `dist/react-native/src/react-native/` |
-| `@sudobility/heavymath_contracts/evm` | any | `dist/unified/src/evm/` |
-| `@sudobility/heavymath_contracts/solana` | any | `dist/unified/src/solana/` (empty) |
-| `@sudobility/heavymath_contracts/react-native` | any | `dist/react-native/src/react-native/` |
+| Import path                                    | Condition            | Output directory                      |
+| ---------------------------------------------- | -------------------- | ------------------------------------- |
+| `@sudobility/heavymath_contracts`              | node/browser/default | `dist/unified/src/unified/`           |
+| `@sudobility/heavymath_contracts`              | react-native         | `dist/react-native/src/react-native/` |
+| `@sudobility/heavymath_contracts/evm`          | any                  | `dist/unified/src/evm/`               |
+| `@sudobility/heavymath_contracts/solana`       | any                  | `dist/unified/src/solana/` (empty)    |
+| `@sudobility/heavymath_contracts/react-native` | any                  | `dist/react-native/src/react-native/` |
 
 ## Smart Contracts
 
@@ -117,16 +117,19 @@ The package has multiple entry points for different environments:
 `Initializable` -> `OwnableUpgradeable` -> `PausableUpgradeable` -> `UUPSUpgradeable` -> `ReentrancyGuardUpgradeable`
 
 **Constants:**
+
 - `MIN_DURATION` = 24 hours (minimum market duration)
 - `RESOLUTION_GRACE_PERIOD` = 24 hours (time after deadline before market can be abandoned)
 
 **Fee state variables (contract-level, owner-configurable):**
+
 - `winnerFeeBps` = 100 (1% default, max 1000 = 10%) — fee on the distributable pool
 - `dealerSharePercent` = 50 (50% default) — dealer's share of the fee; remainder goes to platform
 
 **Market status enum:** `Active` (0), `Cancelled` (1), `Resolved` (2), `Abandoned` (3)
 
 **Market lifecycle:**
+
 1. Dealer creates market (must own DealerNFT with valid permissions) -> status = `Active`
 2. Predictors place predictions with percentage (0-100) and USDC amount before deadline
 3. Predictors can update or withdraw their predictions any time before the market deadline
@@ -138,6 +141,7 @@ The package has multiple entry points for different environments:
 6. If unresolved after deadline + 24h RESOLUTION_GRACE_PERIOD: anyone can call `abandonMarket()` -> full refunds
 
 **All external/public functions:**
+
 - `initialize(dealerNFT, oracleResolver, stakeToken)` - proxy initializer
 - `createMarket(tokenId, category, subCategory, deadline, description, oracleId)` -> returns marketId
 - `setWinnerFeeBps(feeBps)` - owner sets global winner fee (max 1000 = 10%)
@@ -162,6 +166,7 @@ The package has multiple entry points for different environments:
 **Storage gap:** `uint256[48] private __gap` at end of contract for upgrade safety.
 
 **State variables:**
+
 - `winnerFeeBps` (uint256), `dealerSharePercent` (uint256) — fee configuration
 - `dealerNFT` (DealerNFT), `oracleResolver` (OracleResolver), `stakeToken` (IERC20)
 - `marketCounter` (uint256)
@@ -186,6 +191,7 @@ The package has multiple entry points for different environments:
 - `validatePermission(tokenId, category, subCategory)` - view, checks specific permission
 
 **Permission resolution order:**
+
 1. If `category=0xFF` with `subCategory=0xFF` -> allow all (full wildcard)
 2. If specific category matches and has `subCategory=0xFF` -> allow all subcategories for that category
 3. If specific category matches and subCategory is in the array -> allow that specific combination
@@ -223,12 +229,14 @@ The package has multiple entry points for different environments:
 The prediction mechanism uses percentage-based odds (0-100), not binary bets.
 
 **Algorithm** (`calculateEquilibrium`): O(101) linear search over points 1-99
+
 1. Build cumulative totals for each percentage point (0-100)
 2. For each point p (1 to 99): compute `below * (100 - p)` vs `above * p`
 3. Return p with minimal absolute difference (best equilibrium)
 4. Skip points where both below and above are zero
 
 **Settlement** (`_finalizeResolution`):
+
 1. Calculate equilibrium point
 2. Check `_hasTwoSidedMarket()` - if one-sided (all bets on same side) -> auto-cancel, all refunded
 3. If outcome > equilibrium -> predictors above equilibrium win
@@ -237,9 +245,10 @@ The prediction mechanism uses percentage-based odds (0-100), not binary bets.
 6. Predictors at exact equilibrium point are always refunded regardless of outcome
 
 **Fee calculation** (in `_calculateFees` / `calculatePayout`):
+
 - `distributablePool` = totalPool - equilibriumAmount (stakes at exact equilibrium excluded)
-- `totalFee` = distributablePool * winnerFeeBps / 10000 (default 1%)
-- `dealerFee` = totalFee * dealerSharePercent / 100 (default 50% of totalFee)
+- `totalFee` = distributablePool \* winnerFeeBps / 10000 (default 1%)
+- `dealerFee` = totalFee \* dealerSharePercent / 100 (default 50% of totalFee)
 - `systemFee` = totalFee - dealerFee (remainder goes to platform)
 - `winnerPool` = distributablePool - totalFee
 - Each winner gets: `(their_bet / total_winning_bets) * winnerPool`
@@ -251,36 +260,37 @@ The prediction mechanism uses percentage-based odds (0-100), not binary bets.
 Full implementation wrapping PredictionMarket contract via viem.
 
 ```typescript
-import { EVMPredictionClient } from "@sudobility/heavymath_contracts/evm";
+import { EVMPredictionClient } from '@sudobility/heavymath_contracts/evm';
 
 const client = new EVMPredictionClient({
-  predictionMarket: "0x...",
-  stakeToken: "0x..."  // optional, will be read from contract if omitted
+  predictionMarket: '0x...',
+  stakeToken: '0x...', // optional, will be read from contract if omitted
 });
 ```
 
 **All methods (14 write + 2 read):**
 
-| Method | Description |
-|---|---|
-| `createMarket(wallet, params)` | Create a new prediction market |
-| `setWinnerFeeBps(wallet, feeBps)` | Set global winner fee in basis points (owner) |
-| `setDealerSharePercent(wallet, percent)` | Set dealer's share of fee as percentage (owner) |
-| `placePrediction(wallet, marketId, percentage, amount)` | Place prediction (auto-approves ERC20, validates 0-100) |
+| Method                                                                | Description                                                            |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `createMarket(wallet, params)`                                        | Create a new prediction market                                         |
+| `setWinnerFeeBps(wallet, feeBps)`                                     | Set global winner fee in basis points (owner)                          |
+| `setDealerSharePercent(wallet, percent)`                              | Set dealer's share of fee as percentage (owner)                        |
+| `placePrediction(wallet, marketId, percentage, amount)`               | Place prediction (auto-approves ERC20, validates 0-100)                |
 | `updatePrediction(wallet, marketId, newPercentage, additionalAmount)` | Update prediction before deadline (auto-approves if additional amount) |
-| `withdrawPrediction(wallet, marketId)` | Withdraw prediction before deadline |
-| `cancelMarket(wallet, marketId)` | Cancel market (no predictions) |
-| `abandonMarket(wallet, marketId)` | Abandon unresolved market after grace |
-| `resolveMarket(wallet, marketId, resolution)` | Manual resolution by dealer |
-| `resolveMarketWithOracle(wallet, marketId)` | Oracle-based resolution |
-| `claimWinnings(wallet, marketId)` | Claim winnings from resolved market |
-| `claimRefund(wallet, marketId)` | Claim refund (equilibrium/cancelled/abandoned) |
-| `withdrawDealerFees(wallet, marketId)` | Withdraw dealer fees |
-| `withdrawSystemFees(wallet)` | Withdraw system fees (owner) |
-| `getMarket(publicClient, marketId)` | Read market state (view) |
-| `getPrediction(publicClient, marketId, account)` | Read prediction (view) |
+| `withdrawPrediction(wallet, marketId)`                                | Withdraw prediction before deadline                                    |
+| `cancelMarket(wallet, marketId)`                                      | Cancel market (no predictions)                                         |
+| `abandonMarket(wallet, marketId)`                                     | Abandon unresolved market after grace                                  |
+| `resolveMarket(wallet, marketId, resolution)`                         | Manual resolution by dealer                                            |
+| `resolveMarketWithOracle(wallet, marketId)`                           | Oracle-based resolution                                                |
+| `claimWinnings(wallet, marketId)`                                     | Claim winnings from resolved market                                    |
+| `claimRefund(wallet, marketId)`                                       | Claim refund (equilibrium/cancelled/abandoned)                         |
+| `withdrawDealerFees(wallet, marketId)`                                | Withdraw dealer fees                                                   |
+| `withdrawSystemFees(wallet)`                                          | Withdraw system fees (owner)                                           |
+| `getMarket(publicClient, marketId)`                                   | Read market state (view)                                               |
+| `getPrediction(publicClient, marketId, account)`                      | Read prediction (view)                                                 |
 
 **Key behavior:**
+
 - `placePrediction` and `updatePrediction` automatically check ERC20 allowance and call `approve` if needed (`ensureAllowance`)
 - Write methods return `TransactionResult { hash, receiptHash? }` - receiptHash populated only if publicClient provided
 - Constructor accepts `ContractAddresses { predictionMarket, stakeToken? }` - stakeToken is resolved on-chain and cached if not provided
@@ -343,46 +353,46 @@ All three scripts are stubs that log a warning and exit. They are marked for "Ph
 
 All environment variables (copy `.env.example` to `.env` or `.env.local`):
 
-| Variable | Required | Description |
-|---|---|---|
-| `PRIVATE_KEY` | For deploy | Deployer wallet private key |
-| `SEPOLIA_RPC_URL` | No | Override Sepolia RPC (defaults to Alchemy or public node) |
-| `MAINNET_RPC_URL` | No | Override mainnet RPC |
-| `ALCHEMY_API_KEY` | No | Alchemy key for building RPC URLs for all networks |
-| `ETHERSCAN_API_KEY` | No | Etherscan verification (mainnet/sepolia) |
-| `ETHERSCAN_MULTICHAIN_API_KEY` | No | Overrides per-chain keys if set |
-| `POLYGONSCAN_API_KEY` | No | Polygon verification |
-| `ARBISCAN_API_KEY` | No | Arbitrum verification |
-| `BASESCAN_API_KEY` | No | Base verification |
-| `OPTIMISTIC_ETHERSCAN_API_KEY` | No | Optimism verification |
-| `USDC_ADDRESS_MAINNET` | No | Mainnet USDC (default: 0xA0b8...eB48) |
-| `USDC_ADDRESS_SEPOLIA` | No | Sepolia MockUSDC address |
-| `USDC_ADDRESS_POLYGON` | No | Polygon USDC (default: 0x2791...4174) |
-| `USDC_ADDRESS_ARBITRUM` | No | Arbitrum USDC (default: 0xaf88...5831) |
-| `USDC_ADDRESS_BASE` | No | Base USDC (default: 0x8335...2913) |
-| `CHAINLINK_SUBSCRIPTION_ID` | No | Chainlink oracle config |
-| `CHAINLINK_DON_ID` | No | Chainlink oracle config |
-| `REPORT_GAS` | No | Enable gas reporter (true/false) |
-| `COINMARKETCAP_API_KEY` | No | For gas cost in USD |
-| `SOLANA_PRIVATE_KEY` | No | Future Solana deploy key |
-| `SOLANA_RPC_URL` | No | Solana RPC (default: devnet) |
-| `USDC_ADDRESS` | For deploy | Used by deploy.ts directly |
-| `OWNER_MULTISIG` | No | Transfer ownership after deploy |
+| Variable                       | Required   | Description                                               |
+| ------------------------------ | ---------- | --------------------------------------------------------- |
+| `PRIVATE_KEY`                  | For deploy | Deployer wallet private key                               |
+| `SEPOLIA_RPC_URL`              | No         | Override Sepolia RPC (defaults to Alchemy or public node) |
+| `MAINNET_RPC_URL`              | No         | Override mainnet RPC                                      |
+| `ALCHEMY_API_KEY`              | No         | Alchemy key for building RPC URLs for all networks        |
+| `ETHERSCAN_API_KEY`            | No         | Etherscan verification (mainnet/sepolia)                  |
+| `ETHERSCAN_MULTICHAIN_API_KEY` | No         | Overrides per-chain keys if set                           |
+| `POLYGONSCAN_API_KEY`          | No         | Polygon verification                                      |
+| `ARBISCAN_API_KEY`             | No         | Arbitrum verification                                     |
+| `BASESCAN_API_KEY`             | No         | Base verification                                         |
+| `OPTIMISTIC_ETHERSCAN_API_KEY` | No         | Optimism verification                                     |
+| `USDC_ADDRESS_MAINNET`         | No         | Mainnet USDC (default: 0xA0b8...eB48)                     |
+| `USDC_ADDRESS_SEPOLIA`         | No         | Sepolia MockUSDC address                                  |
+| `USDC_ADDRESS_POLYGON`         | No         | Polygon USDC (default: 0x2791...4174)                     |
+| `USDC_ADDRESS_ARBITRUM`        | No         | Arbitrum USDC (default: 0xaf88...5831)                    |
+| `USDC_ADDRESS_BASE`            | No         | Base USDC (default: 0x8335...2913)                        |
+| `CHAINLINK_SUBSCRIPTION_ID`    | No         | Chainlink oracle config                                   |
+| `CHAINLINK_DON_ID`             | No         | Chainlink oracle config                                   |
+| `REPORT_GAS`                   | No         | Enable gas reporter (true/false)                          |
+| `COINMARKETCAP_API_KEY`        | No         | For gas cost in USD                                       |
+| `SOLANA_PRIVATE_KEY`           | No         | Future Solana deploy key                                  |
+| `SOLANA_RPC_URL`               | No         | Solana RPC (default: devnet)                              |
+| `USDC_ADDRESS`                 | For deploy | Used by deploy.ts directly                                |
+| `OWNER_MULTISIG`               | No         | Transfer ownership after deploy                           |
 
 The hardhat config loads `.env` first, then `.env.local` as fallback (override: false).
 
 ## Supported Networks (hardhat.config.cts)
 
-| Network | Chain ID | RPC Source |
-|---|---|---|
-| hardhat | 1337 | In-process |
-| localhost | 1337 | http://127.0.0.1:8545 |
-| mainnet | 1 | Alchemy (eth-mainnet) |
-| sepolia | 11155111 | SEPOLIA_RPC_URL or Alchemy or public node fallback |
-| polygon | 137 | Alchemy (polygon-mainnet) |
-| optimism | 10 | Alchemy (opt-mainnet) |
-| arbitrum | 42161 | Alchemy (arb-mainnet) |
-| base | 8453 | Alchemy (base-mainnet) |
+| Network   | Chain ID | RPC Source                                         |
+| --------- | -------- | -------------------------------------------------- |
+| hardhat   | 1337     | In-process                                         |
+| localhost | 1337     | http://127.0.0.1:8545                              |
+| mainnet   | 1        | Alchemy (eth-mainnet)                              |
+| sepolia   | 11155111 | SEPOLIA_RPC_URL or Alchemy or public node fallback |
+| polygon   | 137      | Alchemy (polygon-mainnet)                          |
+| optimism  | 10       | Alchemy (opt-mainnet)                              |
+| arbitrum  | 42161    | Alchemy (arb-mainnet)                              |
+| base      | 8453     | Alchemy (base-mainnet)                             |
 
 Solidity compiler: 0.8.24 with optimizer enabled (200 runs).
 TypeChain target: ethers-v6.
@@ -404,6 +414,7 @@ Note: `@openzeppelin/hardhat-upgrades` and `hardhat-chai-matchers` are commented
 Returns: `{ market, dealerNFT, oracleResolver, stakeToken, owner, dealer1, dealer2, predictor1, predictor2, predictor3, publicClient }`
 
 Also exports:
+
 - `USDC_DECIMALS = 6`
 - `toUSDC(value: string)` - helper using `parseUnits(value, 6)`
 - `advanceTime(seconds: number)` - helper to mine blocks with time increase
@@ -411,9 +422,11 @@ Also exports:
 ## Dependencies
 
 **Runtime (dependencies):**
+
 - `@openzeppelin/contracts-upgradeable` ^5.0.0
 
 **Peer dependencies (all optional except viem for EVM usage):**
+
 - `viem` >=2.0.0
 - `@solana/web3.js` >=1.95.0, `@solana/spl-token` >=0.4.0
 - `@sudobility/configs` ^0.0.63, `@sudobility/heavymath_types` ^0.0.7, `@sudobility/types` ^1.9.51
@@ -422,6 +435,7 @@ Also exports:
 - `buffer` >=6.0.0, `text-encoding` >=0.7.0, `react-native-get-random-values` >=1.8.0, `react-native-url-polyfill` >=2.0.0
 
 **Key dev dependencies:**
+
 - `hardhat` ^2.26.3
 - `@nomicfoundation/hardhat-viem` ^2.0.0
 - `@nomicfoundation/hardhat-verify` ^2.0.0
@@ -435,6 +449,7 @@ Also exports:
 ## CI/CD
 
 `.github/workflows/ci-cd.yml` uses reusable workflow `johnqh/workflows/.github/workflows/unified-cicd.yml@main`:
+
 - Triggers on push/PR to `main` and `develop` branches
 - npm-access: "public"
 - Passes all repository secrets
@@ -467,13 +482,13 @@ heavymath_app        (React + Vite web frontend)
 
 ### Downstream Impact of Changes
 
-| What Changed | Who Must Update |
-|---|---|
+| What Changed                   | Who Must Update                                                           |
+| ------------------------------ | ------------------------------------------------------------------------- |
 | New/modified event in Solidity | indexer (handler + DB migration), indexer_client (types), heavymath_types |
-| New contract function | EVMPredictionClient SDK (this repo), app hooks if user-facing |
-| ABI change | indexer (abis/ JSON files), contracts SDK re-publish |
-| New contract deployed | indexer (.env addresses), app (.env addresses) |
-| Type changes in SDK exports | indexer_client, lib, app (all consume these types) |
+| New contract function          | EVMPredictionClient SDK (this repo), app hooks if user-facing             |
+| ABI change                     | indexer (abis/ JSON files), contracts SDK re-publish                      |
+| New contract deployed          | indexer (.env addresses), app (.env addresses)                            |
+| Type changes in SDK exports    | indexer_client, lib, app (all consume these types)                        |
 
 ### Deployment Order
 

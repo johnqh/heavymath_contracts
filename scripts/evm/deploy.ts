@@ -27,7 +27,10 @@ async function main() {
     dealerNFTImpl.address,
     dealerNFTInitData,
   ]);
-  const dealerNFT = await viem.getContractAt('DealerNFT', dealerNFTProxy.address);
+  const dealerNFT = await viem.getContractAt(
+    'DealerNFT',
+    dealerNFTProxy.address
+  );
   console.log('🏷️  DealerNFT proxy:', dealerNFTProxy.address);
 
   const oracleImpl = await viem.deployContract('OracleResolver');
@@ -40,20 +43,30 @@ async function main() {
     oracleImpl.address,
     oracleInitData,
   ]);
-  const oracleResolver = await viem.getContractAt('OracleResolver', oracleProxy.address);
+  const oracleResolver = await viem.getContractAt(
+    'OracleResolver',
+    oracleProxy.address
+  );
   console.log('🔮 OracleResolver proxy:', oracleProxy.address);
 
   const predictionImpl = await viem.deployContract('PredictionMarket');
   const predictionInitData = encodeFunctionData({
     abi: parseAbi(['function initialize(address,address,address)']),
     functionName: 'initialize',
-    args: [dealerNFTProxy.address, oracleProxy.address, usdcAddress as `0x${string}`],
+    args: [
+      dealerNFTProxy.address,
+      oracleProxy.address,
+      usdcAddress as `0x${string}`,
+    ],
   });
   const predictionProxy = await viem.deployContract('ERC1967Proxy', [
     predictionImpl.address,
     predictionInitData,
   ]);
-  const predictionMarket = await viem.getContractAt('PredictionMarket', predictionProxy.address);
+  const predictionMarket = await viem.getContractAt(
+    'PredictionMarket',
+    predictionProxy.address
+  );
   console.log('📈 PredictionMarket proxy:', predictionProxy.address);
 
   // Register PredictionMarket as authorized caller on OracleResolver
@@ -67,7 +80,13 @@ async function main() {
   const chainlinkFee = process.env.CHAINLINK_FEE;
   const apiBaseUrl = process.env.CHAINLINK_API_BASE_URL;
 
-  if (linkToken && chainlinkOracle && chainlinkJobId && chainlinkFee && apiBaseUrl) {
+  if (
+    linkToken &&
+    chainlinkOracle &&
+    chainlinkJobId &&
+    chainlinkFee &&
+    apiBaseUrl
+  ) {
     await oracleResolver.write.setChainlinkConfig([
       linkToken as `0x${string}`,
       chainlinkOracle as `0x${string}`,
@@ -82,8 +101,12 @@ async function main() {
     console.log('   Fee:', chainlinkFee);
     console.log('   API base URL:', apiBaseUrl);
   } else {
-    console.log('⚠️ Chainlink env vars not fully set, skipping Chainlink config');
-    console.log('   Set LINK_TOKEN_ADDRESS, CHAINLINK_ORACLE_ADDRESS, CHAINLINK_JOB_ID, CHAINLINK_FEE, CHAINLINK_API_BASE_URL to configure');
+    console.log(
+      '⚠️ Chainlink env vars not fully set, skipping Chainlink config'
+    );
+    console.log(
+      '   Set LINK_TOKEN_ADDRESS, CHAINLINK_ORACLE_ADDRESS, CHAINLINK_JOB_ID, CHAINLINK_FEE, CHAINLINK_API_BASE_URL to configure'
+    );
   }
 
   const newOwner = ownerMultisig ?? deployer.account.address;
@@ -107,7 +130,11 @@ async function main() {
   const deploymentsPath = path.join(process.cwd(), 'DEPLOYED.json');
   const deployments = fs.existsSync(deploymentsPath)
     ? JSON.parse(fs.readFileSync(deploymentsPath, 'utf-8'))
-    : { description: 'Deployment addresses for HeavyMath Prediction Market contracts across different networks', networks: {} };
+    : {
+        description:
+          'Deployment addresses for HeavyMath Prediction Market contracts across different networks',
+        networks: {},
+      };
 
   deployments.networks[network.name] = {
     deployedAt: new Date().toISOString(),
@@ -134,7 +161,7 @@ async function main() {
 
 main()
   .then(() => process.exit(0))
-  .catch((error) => {
+  .catch(error => {
     console.error(error);
     process.exit(1);
   });
