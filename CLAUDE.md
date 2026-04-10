@@ -448,3 +448,42 @@ Also exports:
 - All three contracts disable initializers in their constructors (`_disableInitializers()`).
 - `OracleResolver.markResolved()` is access-controlled: only the PredictionMarket contract or owner can call it. The PredictionMarket address must be set via `setPredictionMarket()` after deployment.
 - `DEPLOYED.json` is currently empty (no networks deployed). The deploy script writes to it.
+
+## Ecosystem Context
+
+This package is the **foundation** of the Heavymath prediction market platform. Changes here cascade downstream:
+
+```
+heavymath_contracts  ← YOU ARE HERE
+       ↓ ABIs, types, EVMPredictionClient SDK
+heavymath_indexer    (indexes contract events into PostgreSQL)
+       ↓ REST/GraphQL/SSE API
+heavymath_indexer_client  (React hooks + IndexerClient HTTP class)
+       ↓ hooks + types
+heavymath_lib        (sports+favorites hooks, off-chain equilibrium calc)
+       ↓ business logic
+heavymath_app        (React + Vite web frontend)
+```
+
+### Downstream Impact of Changes
+
+| What Changed | Who Must Update |
+|---|---|
+| New/modified event in Solidity | indexer (handler + DB migration), indexer_client (types), heavymath_types |
+| New contract function | EVMPredictionClient SDK (this repo), app hooks if user-facing |
+| ABI change | indexer (abis/ JSON files), contracts SDK re-publish |
+| New contract deployed | indexer (.env addresses), app (.env addresses) |
+| Type changes in SDK exports | indexer_client, lib, app (all consume these types) |
+
+### Deployment Order
+
+1. Deploy contracts on-chain (scripts/evm/deploy.ts)
+2. Call `OracleResolver.setPredictionMarket(predictionMarketProxy)` post-deploy
+3. Mint DealerNFTs and set permissions
+4. Publish npm package (`@sudobility/heavymath_contracts`)
+5. Update indexer env vars with new contract addresses + start blocks
+6. Update app env vars with new contract addresses
+
+### Why viem (not ethers)
+
+The SDK (`src/evm/index.ts`) uses **viem** for all contract interactions because the downstream app uses wagmi (which is built on viem). The `ethers` dependency exists **only** for TypeChain type generation during the Hardhat build. Never add ethers-based code to the SDK.
