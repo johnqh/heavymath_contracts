@@ -7,7 +7,8 @@ import hre from 'hardhat';
  * Upgrade DealerNFT implementation via UUPS proxy pattern.
  * - Deploys new DealerNFT implementation
  * - Calls upgradeToAndCall on the existing proxy
- * - Sets default permissions (SPORTS category=1, all subcategories=[0xFF])
+ * - Sets stakeToken (USDC) for mint payment
+ * - Sets default permissions (wildcard: all categories, all subcategories)
  * - Updates DEPLOYED.json with new implementation address
  */
 async function main() {
@@ -43,15 +44,27 @@ async function main() {
   });
   console.log('✅ Proxy upgraded to new implementation');
 
-  // 3. Set default permissions: SPORTS category (1) with all subcategories (0xFF)
-  await dealerNFT.write.setDefaultPermissions([1n, [0xffn]], {
+  // 3. Set stakeToken (USDC) for mint payment
+  const stakeToken = networkDeployment.stakeToken as `0x${string}`;
+  if (
+    stakeToken &&
+    stakeToken !== '0x0000000000000000000000000000000000000000'
+  ) {
+    await dealerNFT.write.setStakeToken([stakeToken], {
+      account: deployer.account,
+    });
+    console.log('💲 Stake token set:', stakeToken);
+  }
+
+  // 4. Set default permissions: wildcard (all categories, all subcategories)
+  await dealerNFT.write.setDefaultPermissions([0xffn, [0xffn]], {
     account: deployer.account,
   });
   console.log(
-    '🏷️  Default permissions set: category=1 (SPORTS), subcategories=[0xFF] (all)'
+    '🏷️  Default permissions set: category=0xFF (all), subcategories=[0xFF] (all)'
   );
 
-  // 4. Update DEPLOYED.json
+  // 5. Update DEPLOYED.json
   networkDeployment.dealerNFT.implementation = newImpl.address;
   networkDeployment.dealerNFT.upgradedAt = new Date().toISOString();
   fs.writeFileSync(deploymentsPath, JSON.stringify(deployments, null, 2));

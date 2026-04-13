@@ -6,14 +6,15 @@ import "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721Enumer
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title DealerNFT
  * @notice NFT-based dealer licensing system with category/subcategory permissions
  * @dev UUPS upgradeable pattern with permission management using 0xFF wildcards
  *
- * Anyone can mint a dealer license by paying the mint price in ETH.
- * The owner can update the mint price and withdraw collected fees.
+ * Anyone can mint a dealer license by paying the mint price in USDC (or other ERC20).
+ * The owner can update the mint price, set the payment token, and withdraw collected fees.
  *
  * Permission System:
  * - Dealers receive an NFT license (tokenId)
@@ -54,6 +55,9 @@ contract DealerNFT is
     /// @notice Default permission subcategories applied to newly minted tokens
     uint256[] public defaultPermissionSubCategories;
 
+    /// @notice ERC20 token used for mint payment (e.g., USDC)
+    IERC20 public stakeToken;
+
     /// @notice Emitted when a license NFT is issued
     event LicenseIssued(uint256 indexed tokenId, address indexed dealer);
 
@@ -68,6 +72,9 @@ contract DealerNFT is
 
     /// @notice Emitted when default permissions are updated
     event DefaultPermissionsUpdated(uint256 category, uint256[] subCategories);
+
+    /// @notice Emitted when the stake token is updated
+    event StakeTokenUpdated(address indexed token);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -105,11 +112,24 @@ contract DealerNFT is
     }
 
     /**
-     * @notice Mint a new dealer license NFT by paying the mint price in ETH
-     * @dev Automatically copies defaultPermissions to the new token if set
+     * @notice Set the ERC20 payment token address (only owner)
+     * @param _stakeToken Address of the ERC20 token (e.g., USDC)
      */
-    function mint() external payable {
-        require(msg.value == mintPrice, "Incorrect payment amount");
+    function setStakeToken(address _stakeToken) external onlyOwner {
+        require(_stakeToken != address(0), "Zero address");
+        stakeToken = IERC20(_stakeToken);
+        emit StakeTokenUpdated(_stakeToken);
+    }
+
+    /**
+     * @notice Mint a new dealer license NFT by paying the mint price in USDC
+     * @dev Caller must approve stakeToken transfer before calling. Copies defaultPermissions if set.
+     */
+    function mint() external {
+        require(address(stakeToken) != address(0), "Payment token not set");
+        if (mintPrice > 0) {
+            require(stakeToken.transferFrom(msg.sender, address(this), mintPrice), "Payment failed");
+        }
 
         uint256 tokenId = _nextTokenId++;
         _safeMint(msg.sender, tokenId);
@@ -131,7 +151,7 @@ contract DealerNFT is
 
     /**
      * @notice Update the mint price (only owner)
-     * @param newPrice New mint price in wei (0 to disable minting)
+     * @param newPrice New mint price in stakeToken base units (e.g., 50_000000 for $50 USDC)
      */
     function setMintPrice(uint256 newPrice) external onlyOwner {
         uint256 oldPrice = mintPrice;
@@ -140,13 +160,13 @@ contract DealerNFT is
     }
 
     /**
-     * @notice Withdraw collected ETH to the owner (only owner)
+     * @notice Withdraw collected stakeToken payments to the owner (only owner)
      */
     function withdrawPayments() external onlyOwner {
-        uint256 balance = address(this).balance;
+        require(address(stakeToken) != address(0), "Payment token not set");
+        uint256 balance = stakeToken.balanceOf(address(this));
         require(balance > 0, "No payments to withdraw");
-        (bool success, ) = owner().call{value: balance}("");
-        require(success, "Transfer failed");
+        require(stakeToken.transfer(owner(), balance), "Transfer failed");
     }
 
     /**
@@ -278,8 +298,9 @@ contract DealerNFT is
 
     /**
      * @dev Storage gap for future upgrades.
-     * Reduced from 50 to 48 after adding defaultPermissionCategory (1 slot)
-     * and defaultPermissionSubCategories (1 slot for dynamic array base).
+     * Reduced from 50 to 47 after adding defaultPermissionCategory (1 slot),
+     * defaultPermissionSubCategories (1 slot for dynamic array base),
+     * and stakeToken (1 slot).
      */
-    uint256[48] private __gap;
+    uint256[47] private __gap;
 }

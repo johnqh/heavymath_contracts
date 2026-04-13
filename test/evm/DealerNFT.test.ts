@@ -1,15 +1,19 @@
 import '@nomicfoundation/hardhat-viem';
 import { expect } from 'chai';
 import hre from 'hardhat';
-import { encodeFunctionData, parseAbi, parseEther } from 'viem';
+import { encodeFunctionData, parseAbi, parseUnits } from 'viem';
 
 const { viem } = hre;
 
-describe('DealerNFT', function () {
-  const MINT_PRICE = parseEther('0.05');
+const USDC_DECIMALS = 6;
+const MINT_PRICE = parseUnits('50', USDC_DECIMALS); // 50 USDC
 
+describe('DealerNFT', function () {
   async function deployDealerNFTFixture() {
     const [owner, dealer1, dealer2, other] = await viem.getWalletClients();
+
+    // Deploy MockUSDC
+    const usdc = await viem.deployContract('MockUSDC');
 
     // Deploy implementation
     const implementation = await viem.deployContract('DealerNFT');
@@ -30,7 +34,30 @@ describe('DealerNFT', function () {
     // Get contract instance at proxy address
     const dealerNFT = await viem.getContractAt('DealerNFT', proxy.address);
 
-    return { dealerNFT, implementation, proxy, owner, dealer1, dealer2, other };
+    // Set USDC as stake token
+    await dealerNFT.write.setStakeToken([usdc.address]);
+
+    // Mint USDC to dealers and approve
+    const mintAmount = parseUnits('10000', USDC_DECIMALS);
+    for (const wallet of [dealer1, dealer2, other]) {
+      await usdc.write.mint([wallet.account.address, mintAmount], {
+        account: owner.account,
+      });
+      await usdc.write.approve([dealerNFT.address, mintAmount], {
+        account: wallet.account,
+      });
+    }
+
+    return {
+      dealerNFT,
+      usdc,
+      implementation,
+      proxy,
+      owner,
+      dealer1,
+      dealer2,
+      other,
+    };
   }
 
   describe('Deployment & Initialization', function () {
@@ -63,16 +90,19 @@ describe('DealerNFT', function () {
       expect(await dealerNFT.read.name()).to.equal('DealerLicense');
       expect(await dealerNFT.read.symbol()).to.equal('DLICENSE');
     });
+
+    it('Should have stakeToken set', async function () {
+      const { dealerNFT, usdc } = await deployDealerNFTFixture();
+      const stakeToken = await dealerNFT.read.stakeToken();
+      expect(stakeToken.toLowerCase()).to.equal(usdc.address.toLowerCase());
+    });
   });
 
   describe('Minting', function () {
-    it('Should mint NFT to caller when paying correct price', async function () {
+    it('Should mint NFT to caller when USDC is approved', async function () {
       const { dealerNFT, dealer1 } = await deployDealerNFTFixture();
 
-      await dealerNFT.write.mint({
-        account: dealer1.account,
-        value: MINT_PRICE,
-      });
+      await dealerNFT.write.mint({ account: dealer1.account });
 
       const nftOwner = await dealerNFT.read.ownerOf([1n]);
       expect(nftOwner.toLowerCase()).to.equal(
@@ -80,17 +110,23 @@ describe('DealerNFT', function () {
       );
     });
 
+    it('Should deduct USDC from minter', async function () {
+      const { dealerNFT, usdc, dealer1 } = await deployDealerNFTFixture();
+      const balanceBefore = await usdc.read.balanceOf([
+        dealer1.account.address,
+      ]);
+
+      await dealerNFT.write.mint({ account: dealer1.account });
+
+      const balanceAfter = await usdc.read.balanceOf([dealer1.account.address]);
+      expect(balanceBefore - balanceAfter).to.equal(MINT_PRICE);
+    });
+
     it('Should auto-increment token IDs', async function () {
       const { dealerNFT, dealer1, dealer2 } = await deployDealerNFTFixture();
 
-      await dealerNFT.write.mint({
-        account: dealer1.account,
-        value: MINT_PRICE,
-      });
-      await dealerNFT.write.mint({
-        account: dealer2.account,
-        value: MINT_PRICE,
-      });
+      await dealerNFT.write.mint({ account: dealer1.account });
+      await dealerNFT.write.mint({ account: dealer2.account });
 
       const owner1 = await dealerNFT.read.ownerOf([1n]);
       const owner2 = await dealerNFT.read.ownerOf([2n]);
@@ -102,42 +138,51 @@ describe('DealerNFT', function () {
       );
     });
 
-    it('Should reject minting with incorrect payment', async function () {
-      const { dealerNFT, dealer1 } = await deployDealerNFTFixture();
+    it('Should reject minting without USDC approval', async function () {
+      const { dealerNFT, usdc, other, owner } = await deployDealerNFTFixture();
+
+      // Give USDC but revoke approval
+      await usdc.write.approve([dealerNFT.address, 0n], {
+        account: other.account,
+      });
 
       try {
-        await dealerNFT.write.mint({
-          account: dealer1.account,
-          value: parseEther('0.01'),
-        });
+        await dealerNFT.write.mint({ account: other.account });
         expect.fail('Should have thrown');
       } catch (error: any) {
-        expect(error.message).to.include('Incorrect payment amount');
+        expect(error.message).to.include('revert');
       }
     });
 
-    it('Should reject minting with no payment', async function () {
-      const { dealerNFT, dealer1 } = await deployDealerNFTFixture();
+    it('Should reject minting without stakeToken set', async function () {
+      const [owner, dealer1] = await viem.getWalletClients();
+      const implementation = await viem.deployContract('DealerNFT');
+      const initData = encodeFunctionData({
+        abi: parseAbi(['function initialize(uint256)']),
+        functionName: 'initialize',
+        args: [MINT_PRICE],
+      });
+      const proxy = await viem.deployContract('ERC1967Proxy', [
+        implementation.address,
+        initData,
+      ]);
+      const dealerNFT = await viem.getContractAt('DealerNFT', proxy.address);
 
       try {
         await dealerNFT.write.mint({ account: dealer1.account });
         expect.fail('Should have thrown');
       } catch (error: any) {
-        expect(error.message).to.include('Incorrect payment amount');
+        expect(error.message).to.include('Payment token not set');
       }
     });
 
     it('Should emit LicenseIssued event', async function () {
       const { dealerNFT, dealer1 } = await deployDealerNFTFixture();
 
-      const hash = await dealerNFT.write.mint({
-        account: dealer1.account,
-        value: MINT_PRICE,
-      });
+      const hash = await dealerNFT.write.mint({ account: dealer1.account });
       const publicClient = await viem.getPublicClient();
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-      // Event should be emitted
       expect(receipt.logs.length).to.be.greaterThan(0);
     });
   });
@@ -145,7 +190,7 @@ describe('DealerNFT', function () {
   describe('Mint Price Management', function () {
     it('Should allow owner to change mint price', async function () {
       const { dealerNFT } = await deployDealerNFTFixture();
-      const newPrice = parseEther('0.1');
+      const newPrice = parseUnits('100', USDC_DECIMALS);
 
       await dealerNFT.write.setMintPrice([newPrice]);
       expect(await dealerNFT.read.mintPrice()).to.equal(newPrice);
@@ -155,7 +200,39 @@ describe('DealerNFT', function () {
       const { dealerNFT, other } = await deployDealerNFTFixture();
 
       try {
-        await dealerNFT.write.setMintPrice([parseEther('0.1')], {
+        await dealerNFT.write.setMintPrice([parseUnits('100', USDC_DECIMALS)], {
+          account: other.account,
+        });
+        expect.fail('Should have thrown');
+      } catch (error: any) {
+        expect(error.message).to.include('OwnableUnauthorizedAccount');
+      }
+    });
+  });
+
+  describe('Stake Token Management', function () {
+    it('Should allow owner to set stake token', async function () {
+      const { dealerNFT, usdc } = await deployDealerNFTFixture();
+      const stakeToken = await dealerNFT.read.stakeToken();
+      expect(stakeToken.toLowerCase()).to.equal(usdc.address.toLowerCase());
+    });
+
+    it('Should reject zero address', async function () {
+      const { dealerNFT } = await deployDealerNFTFixture();
+      try {
+        await dealerNFT.write.setStakeToken([
+          '0x0000000000000000000000000000000000000000',
+        ]);
+        expect.fail('Should have thrown');
+      } catch (error: any) {
+        expect(error.message).to.include('Zero address');
+      }
+    });
+
+    it('Should reject non-owner', async function () {
+      const { dealerNFT, usdc, other } = await deployDealerNFTFixture();
+      try {
+        await dealerNFT.write.setStakeToken([usdc.address], {
           account: other.account,
         });
         expect.fail('Should have thrown');
@@ -166,17 +243,21 @@ describe('DealerNFT', function () {
   });
 
   describe('Payment Withdrawal', function () {
-    it('Should allow owner to withdraw collected payments', async function () {
-      const { dealerNFT, dealer1 } = await deployDealerNFTFixture();
+    it('Should allow owner to withdraw collected USDC', async function () {
+      const { dealerNFT, usdc, owner, dealer1 } =
+        await deployDealerNFTFixture();
 
-      // Mint to collect payment
-      await dealerNFT.write.mint({
-        account: dealer1.account,
-        value: MINT_PRICE,
-      });
+      await dealerNFT.write.mint({ account: dealer1.account });
 
-      // Withdraw
+      const ownerBalanceBefore = await usdc.read.balanceOf([
+        owner.account.address,
+      ]);
       await dealerNFT.write.withdrawPayments();
+      const ownerBalanceAfter = await usdc.read.balanceOf([
+        owner.account.address,
+      ]);
+
+      expect(ownerBalanceAfter - ownerBalanceBefore).to.equal(MINT_PRICE);
     });
 
     it('Should reject withdrawal when no balance', async function () {
@@ -193,10 +274,7 @@ describe('DealerNFT', function () {
     it('Should reject non-owner from withdrawing', async function () {
       const { dealerNFT, dealer1, other } = await deployDealerNFTFixture();
 
-      await dealerNFT.write.mint({
-        account: dealer1.account,
-        value: MINT_PRICE,
-      });
+      await dealerNFT.write.mint({ account: dealer1.account });
 
       try {
         await dealerNFT.write.withdrawPayments({ account: other.account });
@@ -211,10 +289,7 @@ describe('DealerNFT', function () {
     it('Should set permissions for category/subCategory', async function () {
       const { dealerNFT, dealer1 } = await deployDealerNFTFixture();
 
-      await dealerNFT.write.mint({
-        account: dealer1.account,
-        value: MINT_PRICE,
-      });
+      await dealerNFT.write.mint({ account: dealer1.account });
       await dealerNFT.write.setPermissions([1n, 1n, [1n, 2n, 3n]]);
 
       const hasPermissions = await dealerNFT.read.hasPermissions([1n]);
@@ -224,10 +299,7 @@ describe('DealerNFT', function () {
     it('Should validate permissions correctly - exact match', async function () {
       const { dealerNFT, dealer1 } = await deployDealerNFTFixture();
 
-      await dealerNFT.write.mint({
-        account: dealer1.account,
-        value: MINT_PRICE,
-      });
+      await dealerNFT.write.mint({ account: dealer1.account });
       await dealerNFT.write.setPermissions([1n, 1n, [1n, 2n, 3n]]);
 
       expect(await dealerNFT.read.validatePermission([1n, 1n, 1n])).to.be.true;
@@ -239,13 +311,9 @@ describe('DealerNFT', function () {
     it('Should validate permissions - all categories wildcard (0xFF)', async function () {
       const { dealerNFT, dealer1 } = await deployDealerNFTFixture();
 
-      await dealerNFT.write.mint({
-        account: dealer1.account,
-        value: MINT_PRICE,
-      });
+      await dealerNFT.write.mint({ account: dealer1.account });
       await dealerNFT.write.setPermissions([1n, 0xffn, [0xffn]]);
 
-      // Should allow any category and subcategory
       expect(await dealerNFT.read.validatePermission([1n, 1n, 1n])).to.be.true;
       expect(await dealerNFT.read.validatePermission([1n, 99n, 50n])).to.be
         .true;
@@ -254,26 +322,18 @@ describe('DealerNFT', function () {
     it('Should validate permissions - all subcategories wildcard for category', async function () {
       const { dealerNFT, dealer1 } = await deployDealerNFTFixture();
 
-      await dealerNFT.write.mint({
-        account: dealer1.account,
-        value: MINT_PRICE,
-      });
+      await dealerNFT.write.mint({ account: dealer1.account });
       await dealerNFT.write.setPermissions([1n, 5n, [0xffn]]);
 
-      // Should allow category 5 with any subcategory
       expect(await dealerNFT.read.validatePermission([1n, 5n, 1n])).to.be.true;
       expect(await dealerNFT.read.validatePermission([1n, 5n, 99n])).to.be.true;
-      // But not other categories
       expect(await dealerNFT.read.validatePermission([1n, 6n, 1n])).to.be.false;
     });
 
     it('Should support multiple category permissions', async function () {
       const { dealerNFT, dealer1 } = await deployDealerNFTFixture();
 
-      await dealerNFT.write.mint({
-        account: dealer1.account,
-        value: MINT_PRICE,
-      });
+      await dealerNFT.write.mint({ account: dealer1.account });
       await dealerNFT.write.setPermissions([1n, 1n, [1n, 2n]]);
       await dealerNFT.write.setPermissions([1n, 2n, [3n, 4n]]);
 
@@ -285,10 +345,7 @@ describe('DealerNFT', function () {
     it('Should only allow owner to set permissions', async function () {
       const { dealerNFT, dealer1, other } = await deployDealerNFTFixture();
 
-      await dealerNFT.write.mint({
-        account: dealer1.account,
-        value: MINT_PRICE,
-      });
+      await dealerNFT.write.mint({ account: dealer1.account });
 
       try {
         await dealerNFT.write.setPermissions([1n, 1n, [1n]], {
@@ -301,19 +358,30 @@ describe('DealerNFT', function () {
     });
   });
 
+  describe('Default Permissions', function () {
+    it('Should apply default permissions on mint', async function () {
+      const { dealerNFT, dealer1 } = await deployDealerNFTFixture();
+
+      await dealerNFT.write.setDefaultPermissions([0xffn, [0xffn]]);
+      await dealerNFT.write.mint({ account: dealer1.account });
+
+      expect(await dealerNFT.read.hasPermissions([1n])).to.be.true;
+      expect(await dealerNFT.read.validatePermission([1n, 1n, 1n])).to.be.true;
+      expect(await dealerNFT.read.validatePermission([1n, 99n, 50n])).to.be
+        .true;
+    });
+  });
+
   describe('Upgrade', function () {
     it('Should only allow owner to upgrade', async function () {
       const { dealerNFT, other } = await deployDealerNFTFixture();
 
-      // Deploy new implementation
       const newImplementation = await viem.deployContract('DealerNFT');
 
       try {
         await dealerNFT.write.upgradeToAndCall(
           [newImplementation.address, '0x'],
-          {
-            account: other.account,
-          }
+          { account: other.account }
         );
         expect.fail('Should have thrown');
       } catch (error: any) {
@@ -324,18 +392,12 @@ describe('DealerNFT', function () {
     it('Should preserve state after upgrade', async function () {
       const { dealerNFT, dealer1 } = await deployDealerNFTFixture();
 
-      // Mint NFT and set permissions before upgrade
-      await dealerNFT.write.mint({
-        account: dealer1.account,
-        value: MINT_PRICE,
-      });
+      await dealerNFT.write.mint({ account: dealer1.account });
       await dealerNFT.write.setPermissions([1n, 1n, [1n, 2n]]);
 
-      // Upgrade
       const newImplementation = await viem.deployContract('DealerNFT');
       await dealerNFT.write.upgradeToAndCall([newImplementation.address, '0x']);
 
-      // Verify state preserved
       const nftOwner = await dealerNFT.read.ownerOf([1n]);
       expect(nftOwner.toLowerCase()).to.equal(
         dealer1.account.address.toLowerCase()
@@ -348,10 +410,7 @@ describe('DealerNFT', function () {
     it('Should emit transfer event on NFT transfer', async function () {
       const { dealerNFT, dealer1, dealer2 } = await deployDealerNFTFixture();
 
-      await dealerNFT.write.mint({
-        account: dealer1.account,
-        value: MINT_PRICE,
-      });
+      await dealerNFT.write.mint({ account: dealer1.account });
 
       const hash = await dealerNFT.write.transferFrom(
         [dealer1.account.address, dealer2.account.address, 1n],
@@ -361,7 +420,6 @@ describe('DealerNFT', function () {
       const publicClient = await viem.getPublicClient();
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-      // Should emit LicenseTransferred event
       expect(receipt.logs.length).to.be.greaterThan(0);
     });
   });

@@ -26,7 +26,14 @@ export async function deployPredictionFixture() {
     'DealerNFT',
     dealerNFTProxy.address
   );
-  // Mint dealer licenses (mintPrice=0 so no ETH needed)
+
+  // Deploy MockUSDC early so we can set it as stake token on DealerNFT
+  const stakeToken = await viem.deployContract('MockUSDC');
+
+  // Set stake token on DealerNFT (required for minting, even at price 0)
+  await dealerNFT.write.setStakeToken([stakeToken.address]);
+
+  // Mint dealer licenses (mintPrice=0 so no USDC transfer, but stakeToken must be set)
   await dealerNFT.write.mint({ account: dealer1.account });
   await dealerNFT.write.mint({ account: dealer2.account });
   await dealerNFT.write.setPermissions([1n, 1n, [0xffn]]);
@@ -46,8 +53,6 @@ export async function deployPredictionFixture() {
     'OracleResolver',
     oracleProxy.address
   );
-
-  const stakeToken = await viem.deployContract('MockUSDC');
 
   const marketImpl = await viem.deployContract('PredictionMarket');
   const marketInitData = encodeFunctionData({

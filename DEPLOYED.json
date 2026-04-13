@@ -7,8 +7,9 @@
       "stakeToken": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
       "owner": "0x1996d64d8f6e47a5bf6fb92246ef4efd6ae881e0",
       "dealerNFT": {
-        "implementation": "0x6ffae62f48575ad02daff30dcea5bfc792299215",
-        "proxy": "0x995442225c718c0a7d16600f90c194d3966ca168"
+        "implementation": "0x560a3056f085432e727f0d5817928ee871230f18",
+        "proxy": "0x995442225c718c0a7d16600f90c194d3966ca168",
+        "upgradedAt": "2026-04-13T18:10:15.295Z"
       },
       "oracleResolver": {
         "implementation": "0x090e4931afa219b267597cbe75a33ae5591d946b",
