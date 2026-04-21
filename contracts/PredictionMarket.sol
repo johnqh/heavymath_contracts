@@ -221,7 +221,7 @@ contract PredictionMarket is
 
         winnerFeeBps = 100; // 1%
         dealerSharePercent = 50; // 50/50 split
-        testMode = true;
+        testMode = false;
     }
 
     /**
