@@ -139,7 +139,7 @@ describe('DealerNFT', function () {
     });
 
     it('Should reject minting without USDC approval', async function () {
-      const { dealerNFT, usdc, other, owner } = await deployDealerNFTFixture();
+      const { dealerNFT, usdc, other } = await deployDealerNFTFixture();
 
       // Give USDC but revoke approval
       await usdc.write.approve([dealerNFT.address, 0n], {
@@ -155,7 +155,7 @@ describe('DealerNFT', function () {
     });
 
     it('Should reject minting without stakeToken set', async function () {
-      const [owner, dealer1] = await viem.getWalletClients();
+      const [, dealer1] = await viem.getWalletClients();
       const implementation = await viem.deployContract('DealerNFT');
       const initData = encodeFunctionData({
         abi: parseAbi(['function initialize(uint256)']),
