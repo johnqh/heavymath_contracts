@@ -2,22 +2,40 @@
   "description": "Deployment addresses for HeavyMath Prediction Market contracts across different networks",
   "networks": {
     "sepolia": {
-      "deployedAt": "2026-04-10T23:05:28.948Z",
+      "deployedAt": "2026-04-21T00:01:38.160Z",
       "deployer": "0x1996d64d8f6e47a5bf6fb92246ef4efd6ae881e0",
       "stakeToken": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
       "owner": "0x1996d64d8f6e47a5bf6fb92246ef4efd6ae881e0",
       "dealerNFT": {
-        "implementation": "0x560a3056f085432e727f0d5817928ee871230f18",
-        "proxy": "0x995442225c718c0a7d16600f90c194d3966ca168",
-        "upgradedAt": "2026-04-13T18:10:15.295Z"
+        "implementation": "0x4463cf1f2aa10c9d6216a1be65ed15f3be04c8bf",
+        "proxy": "0x995442225c718c0a7d16600f90c194d3966ca168"
       },
       "oracleResolver": {
-        "implementation": "0x090e4931afa219b267597cbe75a33ae5591d946b",
+        "implementation": "0xb61a266fe8f0f1f37a5395ce28627916dd8b8db9",
         "proxy": "0x8a565a4f1ced3f1a242392b7b3465a768f4a0321"
       },
       "predictionMarket": {
-        "implementation": "0x3946ecf6fd4ae9c774a4a844310267801bab53b7",
-        "proxy": "0x43a2a796d546ce804b9e1f453e1f61065efbd7f6"
+        "implementation": "0xe490a9d9415605015cb59ba2ecb4cf5caec91bb4",
+        "proxy": "0x43a2a796d546ce804b9e1f453e1f61065efbd7f6",
+        "upgradedAt": "2026-04-21T00:04:39.875Z"
+      }
+    },
+    "hardhat": {
+      "deployedAt": "2026-04-20T23:34:53.496Z",
+      "deployer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+      "stakeToken": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+      "owner": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+      "dealerNFT": {
+        "implementation": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+        "proxy": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512"
+      },
+      "oracleResolver": {
+        "implementation": "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0",
+        "proxy": "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9"
+      },
+      "predictionMarket": {
+        "implementation": "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9",
+        "proxy": "0x5fc8d32690cc91d4c39d9d3abcbd16989f875707"
       }
     }
   }

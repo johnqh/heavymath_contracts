@@ -12,6 +12,20 @@ const ZERO_ORACLE_ID =
   '0x0000000000000000000000000000000000000000000000000000000000000000';
 
 describe('PredictionMarket (USDC)', function () {
+  async function createMarketForFixture(
+    fixtures: Awaited<ReturnType<typeof deployPredictionFixture>>
+  ) {
+    const block = await fixtures.publicClient.getBlock();
+    const deadline = block.timestamp + 86401n;
+
+    await fixtures.market.write.createMarket(
+      [1n, 1n, 1n, deadline, 'Split regression market', ZERO_ORACLE_ID],
+      { account: fixtures.dealer1.account }
+    );
+
+    return 1n;
+  }
+
   describe('Initialization', function () {
     it('sets core dependencies and owner', async function () {
       const { market, dealerNFT, oracleResolver, stakeToken } =
@@ -149,13 +163,14 @@ describe('PredictionMarket (USDC)', function () {
 
       await advanceTime(86401);
 
+      let reverted = false;
       try {
         await market.write.lockMarket([1n]);
-        expect.fail('Should have reverted');
       } catch (error: any) {
-        // calculateEquilibrium returns 0 for one-sided, _lockWithEquilibrium reverts
-        expect(error.message).to.match(/No valid equilibrium|One-sided market/);
+        reverted = true;
+        expect(error.message).to.include('revert');
       }
+      expect(reverted).to.equal(true);
     });
 
     it('allows abandonment with refunds when dealer/oracle stalled', async function () {
@@ -214,9 +229,8 @@ describe('PredictionMarket (USDC)', function () {
         account: dealer1.account,
       });
 
-      // New formula: eq=40 (gap). neg=1000M(at 40), pos=1000M(at 80).
-      // pNeg=40, pPos=41. pos overweight. excess=24390244. pool=1975609756.
-      // fee=19756097, dealerFee=9878048, systemFee=9878049. winnerPool=1955853659.
+      // Current split algorithm keeps both boundaries fully:
+      // neg=(40,1000), pos=(80,1000), pool=2000, fee=20, winnerPool=1980.
       const winnerBefore = await stakeToken.read.balanceOf([
         predictor2.account.address,
       ]);
@@ -224,7 +238,7 @@ describe('PredictionMarket (USDC)', function () {
       const winnerAfter = await stakeToken.read.balanceOf([
         predictor2.account.address,
       ]);
-      expect(winnerAfter - winnerBefore).to.equal(1955853659n);
+      expect(winnerAfter - winnerBefore).to.equal(toUSDC('1980'));
 
       const dealerBefore = await stakeToken.read.balanceOf([
         dealer1.account.address,
@@ -233,7 +247,7 @@ describe('PredictionMarket (USDC)', function () {
       const dealerAfter = await stakeToken.read.balanceOf([
         dealer1.account.address,
       ]);
-      expect(dealerAfter - dealerBefore).to.equal(9878048n);
+      expect(dealerAfter - dealerBefore).to.equal(toUSDC('10'));
 
       const ownerBefore = await stakeToken.read.balanceOf([
         owner.account.address,
@@ -242,10 +256,10 @@ describe('PredictionMarket (USDC)', function () {
       const ownerAfter = await stakeToken.read.balanceOf([
         owner.account.address,
       ]);
-      expect(ownerAfter - ownerBefore).to.equal(9878049n);
+      expect(ownerAfter - ownerBefore).to.equal(toUSDC('10'));
     });
 
-    it('resolves with pre-computed equilibrium (gas-optimized)', async function () {
+    it('resolves with the auto-computed split', async function () {
       const {
         market,
         dealer1,
@@ -270,9 +284,7 @@ describe('PredictionMarket (USDC)', function () {
       });
 
       await advanceTime(86401);
-
-      // Pre-computed equilibrium = 40 (matches what on-chain lockMarket would compute)
-      await market.write.lockMarketWithEquilibrium([1n, 40n]);
+      await market.write.lockMarket([1n]);
       await market.write.resolveMarket([1n, true], {
         account: dealer1.account,
       });
@@ -281,8 +293,8 @@ describe('PredictionMarket (USDC)', function () {
       expect(marketData[8]).to.equal(2); // Resolved
       expect(marketData[10]).to.equal(40n); // equilibrium = 40
 
-      // New formula: eq=40 (gap). excess=2439025. pool=197560975.
-      // fee=1975609. winnerPool=195585366. effective=97560975. payout=195585366.
+      // Current split algorithm keeps both boundaries fully:
+      // pool=200, fee=2, winnerPool=198.
       const winnerBefore = await stakeToken.read.balanceOf([
         predictor2.account.address,
       ]);
@@ -290,10 +302,10 @@ describe('PredictionMarket (USDC)', function () {
       const winnerAfter = await stakeToken.read.balanceOf([
         predictor2.account.address,
       ]);
-      expect(winnerAfter - winnerBefore).to.equal(195585366n);
+      expect(winnerAfter - winnerBefore).to.equal(toUSDC('198'));
     });
 
-    it('rejects invalid equilibrium values (0 and 100)', async function () {
+    it('exposes the computed split boundaries through lockRefunds', async function () {
       const { market, dealer1, predictor1, predictor2, publicClient } =
         await deployPredictionFixture();
       const block = await publicClient.getBlock();
@@ -312,20 +324,13 @@ describe('PredictionMarket (USDC)', function () {
       });
 
       await advanceTime(86401);
+      await market.write.lockMarket([1n]);
 
-      try {
-        await market.write.lockMarketWithEquilibrium([1n, 0n]);
-        expect.fail('Should have thrown for equilibrium=0');
-      } catch (error: any) {
-        expect(error.message).to.include('Invalid equilibrium');
-      }
-
-      try {
-        await market.write.lockMarketWithEquilibrium([1n, 100n]);
-        expect.fail('Should have thrown for equilibrium=100');
-      } catch (error: any) {
-        expect(error.message).to.include('Invalid equilibrium');
-      }
+      const lockInfo = await market.read.lockRefunds([1n]);
+      expect(lockInfo[0]).to.equal(30n);
+      expect(lockInfo[1]).to.equal(70n);
+      expect(lockInfo[2]).to.equal(233333333n);
+      expect(lockInfo[3]).to.equal(toUSDC('100'));
     });
 
     it('anyone can lock but only dealer can resolve', async function () {
@@ -349,7 +354,7 @@ describe('PredictionMarket (USDC)', function () {
       await advanceTime(86401);
 
       // Anyone can lock (predictor1 locks here)
-      await market.write.lockMarketWithEquilibrium([1n, 50n], {
+      await market.write.lockMarket([1n], {
         account: predictor1.account,
       });
 
@@ -364,7 +369,7 @@ describe('PredictionMarket (USDC)', function () {
       }
     });
 
-    it('reverts locking one-sided market with pre-computed equilibrium', async function () {
+    it('reports no valid split for a one-sided market', async function () {
       const { market, dealer1, predictor1, publicClient } =
         await deployPredictionFixture();
       const block = await publicClient.getBlock();
@@ -380,13 +385,8 @@ describe('PredictionMarket (USDC)', function () {
       });
 
       await advanceTime(86401);
-
-      try {
-        await market.write.lockMarketWithEquilibrium([1n, 50n]);
-        expect.fail('Should have reverted');
-      } catch (error: any) {
-        expect(error.message).to.include('One-sided market');
-      }
+      const split = await market.read.calculateMarketSplit([1n]);
+      expect(split[4]).to.equal(false);
     });
 
     it('validates oracle timestamps before resolving', async function () {
@@ -458,6 +458,81 @@ describe('PredictionMarket (USDC)', function () {
       await market.write.resolveMarketWithOracle([1n]);
       state = await market.read.markets([1n]);
       expect(state[8]).to.equal(2); // Resolved
+    });
+  });
+
+  describe('Split edge cases', function () {
+    it('handles 0%, 50%, 100% without reverting and matches TS split', async function () {
+      const fixtures = await deployPredictionFixture();
+      const { market, predictor1, predictor2, predictor3 } = fixtures;
+      const marketId = await createMarketForFixture(fixtures);
+
+      await market.write.placePrediction([marketId, 0n, toUSDC('100')], {
+        account: predictor1.account,
+      });
+      await market.write.placePrediction([marketId, 50n, toUSDC('100')], {
+        account: predictor2.account,
+      });
+      await market.write.placePrediction([marketId, 100n, toUSDC('100')], {
+        account: predictor3.account,
+      });
+
+      const split = await market.read.calculateMarketSplit([marketId]);
+      expect(split[0]).to.equal(50n);
+      expect(split[1]).to.equal(100n);
+      expect(split[2]).to.equal(toUSDC('100'));
+      expect(split[3]).to.equal(toUSDC('100'));
+      expect(split[4]).to.equal(true);
+
+      await advanceTime(86401);
+      await market.write.lockMarket([marketId]);
+
+      const marketData = await market.read.markets([marketId]);
+      expect(marketData[10]).to.equal(50n);
+
+      const lockInfo = await market.read.lockRefunds([marketId]);
+      expect(lockInfo[0]).to.equal(50n);
+      expect(lockInfo[1]).to.equal(100n);
+      expect(lockInfo[2]).to.equal(toUSDC('100'));
+      expect(lockInfo[3]).to.equal(toUSDC('100'));
+    });
+
+    it('handles 0%, 1%, 99%, 100% without reverting and matches TS split', async function () {
+      const fixtures = await deployPredictionFixture();
+      const { market, predictor1, predictor2, predictor3, dealer2 } = fixtures;
+      const marketId = await createMarketForFixture(fixtures);
+
+      await market.write.placePrediction([marketId, 0n, toUSDC('100')], {
+        account: predictor1.account,
+      });
+      await market.write.placePrediction([marketId, 1n, toUSDC('100')], {
+        account: predictor2.account,
+      });
+      await market.write.placePrediction([marketId, 99n, toUSDC('100')], {
+        account: predictor3.account,
+      });
+      await market.write.placePrediction([marketId, 100n, toUSDC('100')], {
+        account: dealer2.account,
+      });
+
+      const split = await market.read.calculateMarketSplit([marketId]);
+      expect(split[0]).to.equal(0n);
+      expect(split[1]).to.equal(1n);
+      expect(split[2]).to.equal(toUSDC('100'));
+      expect(split[3]).to.equal(toUSDC('100'));
+      expect(split[4]).to.equal(true);
+
+      await advanceTime(86401);
+      await market.write.lockMarket([marketId]);
+
+      const marketData = await market.read.markets([marketId]);
+      expect(marketData[10]).to.equal(0n);
+
+      const lockInfo = await market.read.lockRefunds([marketId]);
+      expect(lockInfo[0]).to.equal(0n);
+      expect(lockInfo[1]).to.equal(1n);
+      expect(lockInfo[2]).to.equal(toUSDC('100'));
+      expect(lockInfo[3]).to.equal(toUSDC('100'));
     });
   });
 });

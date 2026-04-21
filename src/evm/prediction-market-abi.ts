@@ -581,13 +581,13 @@ export const PREDICTION_MARKET_ABI = [
         type: 'uint256',
       },
     ],
-    name: 'calculateEquilibrium',
+    name: 'calculateMarketSplit',
     outputs: [
-      {
-        internalType: 'uint256',
-        name: '',
-        type: 'uint256',
-      },
+      { internalType: 'uint256', name: 'negPct', type: 'uint256' },
+      { internalType: 'uint256', name: 'posPct', type: 'uint256' },
+      { internalType: 'uint256', name: 'negAmt', type: 'uint256' },
+      { internalType: 'uint256', name: 'posAmt', type: 'uint256' },
+      { internalType: 'bool', name: 'valid', type: 'bool' },
     ],
     stateMutability: 'view',
     type: 'function',
@@ -869,24 +869,6 @@ export const PREDICTION_MARKET_ABI = [
     inputs: [
       {
         internalType: 'uint256',
-        name: 'marketId',
-        type: 'uint256',
-      },
-      {
-        internalType: 'uint256',
-        name: 'equilibrium',
-        type: 'uint256',
-      },
-    ],
-    name: 'lockMarketWithEquilibrium',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [
-      {
-        internalType: 'uint256',
         name: '',
         type: 'uint256',
       },
@@ -918,18 +900,23 @@ export const PREDICTION_MARKET_ABI = [
     name: 'lockRefunds',
     outputs: [
       {
-        internalType: 'bool',
-        name: 'overweightIsBelow',
-        type: 'bool',
-      },
-      {
         internalType: 'uint256',
-        name: 'excessAmount',
+        name: 'negativePercentage',
         type: 'uint256',
       },
       {
         internalType: 'uint256',
-        name: 'overweightTotal',
+        name: 'positivePercentage',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'negativeAllowedAmount',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'positiveAllowedAmount',
         type: 'uint256',
       },
     ],

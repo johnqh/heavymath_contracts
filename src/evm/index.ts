@@ -251,15 +251,16 @@ export class EVMPredictionClient {
     return this.execute(wallet, 'lockMarket', [marketId]);
   }
 
-  async lockMarketWithEquilibrium(
-    wallet: WalletContext,
-    marketId: bigint,
-    equilibrium: bigint
-  ): Promise<TransactionResult> {
-    return this.execute(wallet, 'lockMarketWithEquilibrium', [
-      marketId,
-      equilibrium,
-    ]);
+  async calculateMarketSplit(
+    publicClient: PublicClient,
+    marketId: bigint
+  ): Promise<[bigint, bigint, bigint, bigint, boolean]> {
+    return publicClient.readContract({
+      address: this.addresses.predictionMarket,
+      abi: PREDICTION_MARKET_ABI,
+      functionName: 'calculateMarketSplit',
+      args: [marketId],
+    }) as Promise<[bigint, bigint, bigint, bigint, boolean]>;
   }
 
   async resolveMarketWithOracle(
