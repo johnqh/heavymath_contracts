@@ -834,7 +834,7 @@ contract PredictionMarket is
 
             // Check if positive side satisfies negative side's desire:
             // 0% bettors are unconditionally negative, no constraint on positive side
-            uint256 desiredMinPos = pcts[i] == 0 ? 0 : ((100 - pcts[i]) * negativeTotal) / pcts[i];
+            uint256 desiredMinPos = pcts[i] == 0 ? 0 : (pcts[i] * negativeTotal) / (100 - pcts[i]);
 
             if (positiveTotal >= desiredMinPos) {
                 // Check if negative side satisfies positive side's desire:
@@ -876,14 +876,16 @@ contract PredictionMarket is
             return (pcts[negativeIndex], 100, amts[negativeIndex], amts[negativeIndex + 1], true);
         }
 
-        // Max negative allowed: pPos * sum(pos) / (100 - pPos)
-        uint256 desiredMaxNeg = (pcts[negativeIndex + 1] * positiveTotal) / (100 - pcts[negativeIndex + 1]);
+        // Max negative allowed: (100 - pPos) * sum(pos) / pPos
+        uint256 desiredMaxNeg = ((100 - pcts[negativeIndex + 1]) * positiveTotal) / pcts[negativeIndex + 1];
 
         uint256 negAmount = negativeTotal;
         for (uint256 i = negativeIndex + 1; i > 0; i--) {
             if (negAmount - amts[i - 1] < desiredMaxNeg) {
                 // Stop here - this percentage is the boundary
-                return (pcts[i - 1], pcts[negativeIndex + 1], desiredMaxNeg - (negAmount - amts[i - 1]), amts[negativeIndex + 1], true);
+                uint256 allowed = desiredMaxNeg - (negAmount - amts[i - 1]);
+                if (allowed > amts[i - 1]) allowed = amts[i - 1];
+                return (pcts[i - 1], pcts[negativeIndex + 1], allowed, amts[negativeIndex + 1], true);
             }
             negAmount -= amts[i - 1];
         }

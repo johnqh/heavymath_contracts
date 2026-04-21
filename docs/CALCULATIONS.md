@@ -22,16 +22,16 @@ staking[] - array of {percentage, sum(negative)}, sorted by percentage
 ```
 
 // for negative side
-sum(posivie) / sum(negative) >= (100 - pNegative) / pNegative;
+sum(posivie) / sum(negative) >= pNegative / (100 - pNegative);
 Meaning:
-sum(positive) >= (100 - pNegative) * sum(negative) / pNegative // minimum positive
-sum(negative) <= pNegative * sum(positive) / (100 - pNegative) // maximum negative
+sum(positive) >= pNegative * sum(negative) / (100 - pNegative) // minimum positive
+sum(negative) <= (100 - pNegative) * sum(positive) / pNegative // maximum negative
 
 // for positive side
-sum(negative) / sum(positive) >= pPositive / (100 - pPositive)
+sum(negative) / sum(positive) >= (100 - pPositive) / pPositive
 Meaning:
-sum(negative) >= pPositive * sum(positive) / (100 - pPositive) // minimum negative
-sum(positive) <= (100 - pPositive) * sum(negative) / pPositive // maximum positive
+sum(negative) >= (100 - pPositive) * sum(positive) / pPositive // minimum negative
+sum(positive) <= pPositive * sum(negative) / (100 - pPositive) // maximum positive
 
 ```
 

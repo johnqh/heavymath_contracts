@@ -229,8 +229,10 @@ describe('PredictionMarket (USDC)', function () {
         account: dealer1.account,
       });
 
-      // Current split algorithm keeps both boundaries fully:
-      // neg=(40,1000), pos=(80,1000), pool=2000, fee=20, winnerPool=1980.
+      // desiredMinPos = (40*1000)/60 = 666.67. posTotal(1000) >= 666.67 → yes
+      // desiredMinNeg = (80*1000)/20 = 4000. negTotal(1000) < 4000 → last iter, cap pos to 666.67
+      // poolAfterLock = 2000 - (1000 - 666.666666) = 1666.666666
+      // fee = 1666.666666 * 1% = 16.666666. winnerPool = 1650.
       const winnerBefore = await stakeToken.read.balanceOf([
         predictor2.account.address,
       ]);
@@ -238,7 +240,7 @@ describe('PredictionMarket (USDC)', function () {
       const winnerAfter = await stakeToken.read.balanceOf([
         predictor2.account.address,
       ]);
-      expect(winnerAfter - winnerBefore).to.equal(toUSDC('1980'));
+      expect(winnerAfter - winnerBefore).to.equal(1650000000n);
 
       const dealerBefore = await stakeToken.read.balanceOf([
         dealer1.account.address,
@@ -247,7 +249,7 @@ describe('PredictionMarket (USDC)', function () {
       const dealerAfter = await stakeToken.read.balanceOf([
         dealer1.account.address,
       ]);
-      expect(dealerAfter - dealerBefore).to.equal(toUSDC('10'));
+      expect(dealerAfter - dealerBefore).to.equal(8333333n);
 
       const ownerBefore = await stakeToken.read.balanceOf([
         owner.account.address,
@@ -256,7 +258,7 @@ describe('PredictionMarket (USDC)', function () {
       const ownerAfter = await stakeToken.read.balanceOf([
         owner.account.address,
       ]);
-      expect(ownerAfter - ownerBefore).to.equal(toUSDC('10'));
+      expect(ownerAfter - ownerBefore).to.equal(8333333n);
     });
 
     it('resolves with the auto-computed split', async function () {
@@ -293,8 +295,8 @@ describe('PredictionMarket (USDC)', function () {
       expect(marketData[8]).to.equal(2); // Resolved
       expect(marketData[10]).to.equal(40n); // equilibrium = 40
 
-      // Current split algorithm keeps both boundaries fully:
-      // pool=200, fee=2, winnerPool=198.
+      // bet(40,$100) + bet(80,$100): posAllowed = (40*100)/60 = 66.666666
+      // poolAfterLock = 200 - (100 - 66.666666) = 166.666666. fee=1.666666. winnerPool=165.
       const winnerBefore = await stakeToken.read.balanceOf([
         predictor2.account.address,
       ]);
@@ -302,7 +304,7 @@ describe('PredictionMarket (USDC)', function () {
       const winnerAfter = await stakeToken.read.balanceOf([
         predictor2.account.address,
       ]);
-      expect(winnerAfter - winnerBefore).to.equal(toUSDC('198'));
+      expect(winnerAfter - winnerBefore).to.equal(165000000n);
     });
 
     it('exposes the computed split boundaries through lockRefunds', async function () {
@@ -329,8 +331,9 @@ describe('PredictionMarket (USDC)', function () {
       const lockInfo = await market.read.lockRefunds([1n]);
       expect(lockInfo[0]).to.equal(30n);
       expect(lockInfo[1]).to.equal(70n);
-      expect(lockInfo[2]).to.equal(233333333n);
-      expect(lockInfo[3]).to.equal(toUSDC('100'));
+      // desiredMinPos = (30*100M)/70 = 42857142. Positive side capped.
+      expect(lockInfo[2]).to.equal(toUSDC('100'));
+      expect(lockInfo[3]).to.equal(42857142n);
     });
 
     it('anyone can lock but only dealer can resolve', async function () {

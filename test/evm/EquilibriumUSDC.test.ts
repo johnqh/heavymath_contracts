@@ -25,7 +25,7 @@ describe('Market Split algorithm (USDC)', function () {
   // ========== GROUP A: Split Calculation ==========
 
   describe('Split calculation', function () {
-    it('A1: two symmetric bets — split at those percentages, no refund', async function () {
+    it('A1: two symmetric bets — split at those percentages, positive side capped', async function () {
       const { market, predictor1, predictor2, marketId } = await setupMarket();
 
       await market.write.placePrediction([marketId, 40n, toUSDC('150')], {
@@ -38,8 +38,8 @@ describe('Market Split algorithm (USDC)', function () {
       await advanceTime(86401);
 
       // Split: neg=40, pos=60
-      // desiredMinPos = (60*150)/40 = 225 > posTotal(150) → reverseCalculate
-      // desiredMaxNeg = (60*150)/40 = 225. negAllowed = 225 (> actual 150, no refund)
+      // desiredMinPos = (40*150)/60 = 100. posTotal(150) >= 100 → yes
+      // desiredMinNeg = (60*150)/40 = 225. negTotal(150) < 225 → last iter, cap pos to 100
       const [negPct, posPct, negAmt, posAmt, valid] =
         await market.read.calculateMarketSplit([marketId]);
       expect(valid).to.be.true;
@@ -48,25 +48,26 @@ describe('Market Split algorithm (USDC)', function () {
 
       await market.write.lockMarket([marketId]);
 
-      // No refunds since allowed >= actual for both sides
+      // No neg refund (negAllowed=150 = actual)
       const refund1 = await market.read.getLockRefundAmount([
         marketId,
         predictor1.account.address,
       ]);
+      // Positive side capped: posAllowed=100M < actual(150M), excess=50M
       const refund2 = await market.read.getLockRefundAmount([
         marketId,
         predictor2.account.address,
       ]);
       expect(refund1).to.equal(0n);
-      expect(refund2).to.equal(0n);
+      expect(refund2).to.equal(50000000n);
     });
 
-    it('A2: uneven amounts — split at percentages, partial refund on overweight', async function () {
+    it('A2: uneven amounts — split at percentages, positive side capped', async function () {
       const { market, predictor1, predictor2, marketId } = await setupMarket();
 
       // bet(20,$300) + bet(80,$100)
-      // normalizedCalc: desiredMinPos = (80*300)/20 = 1200 > posTotal(100) → reverse
-      // desiredMaxNeg = (80*100)/20 = 400. negAllowed=400 (> actual 300, no refund)
+      // desiredMinPos = (20*300)/80 = 75. posTotal(100) >= 75 → yes
+      // desiredMinNeg = (80*100)/20 = 400. negTotal(300) < 400 → last iter, cap pos to 75
       await market.write.placePrediction([marketId, 20n, toUSDC('300')], {
         account: predictor1.account,
       });
@@ -84,19 +85,20 @@ describe('Market Split algorithm (USDC)', function () {
 
       await market.write.lockMarket([marketId]);
 
-      // negAllowed=400 > actual(300), posAllowed=100 = actual(100). No refunds.
+      // negAllowed=300 = actual(300), no neg refund
       expect(
         await market.read.getLockRefundAmount([
           marketId,
           predictor1.account.address,
         ])
       ).to.equal(0n);
+      // posAllowed=75M < actual(100M), excess=25M
       expect(
         await market.read.getLockRefundAmount([
           marketId,
           predictor2.account.address,
         ])
-      ).to.equal(0n);
+      ).to.equal(25000000n);
     });
 
     it('A3: adjacent bets 49 and 51 — split at those percentages', async function () {
@@ -185,79 +187,40 @@ describe('Market Split algorithm (USDC)', function () {
   // ========== GROUP B: Lock Refund Mechanism ==========
 
   describe('Lock refund mechanism', function () {
-    it('B1: positive side overweight gets partial refund', async function () {
-      const { market, predictor1, predictor2, marketId } = await setupMarket();
+    it('B1: positive side capped gets partial refund', async function () {
+      const { market, predictor1, predictor2, predictor3, marketId } =
+        await setupMarket();
 
-      // bet(80,$100) + bet(20,$300)
-      // reverse: desiredMaxNeg = (80*100)/20 = 400. negAllowed=400 > actual(300).
-      // normalized: split=(20,80), negAllowed=400, posAllowed=100. No refund.
-      //
-      // Instead test with amounts that trigger a refund:
       // bet(20,$100) + bet(80,$300)
-      // normalizedCalc: i=0, negTotal=100, posTotal=300
-      //   desiredMinPos = (80*100)/20 = 400
-      //   posTotal(300) >= 400? No → reverseCalculate
-      //   desiredMaxNeg = (80*300)/20 = 1200. negAllowed=1200 > actual(100). No neg refund.
-      // Hmm, this doesn't trigger refunds either because allowed > actual.
-      //
-      // To trigger a refund we need a case where the split boundary amount < actual.
-      // This happens when there are multiple percentage levels and the boundary
-      // has more than what's needed.
-      //
-      // bet(20,$100) + bet(30,$100) + bet(70,$100)
-      // sorted: [{20,100}, {30,100}, {70,100}], total=300
-      // i=0: negTotal=100, posTotal=200
-      //   desiredMinPos = (80*100)/20 = 400
-      //   posTotal(200) >= 400? No → reverseCalculate
-      //   posPercentage=30, desiredMaxNeg = (30*200)/70 = 85.71 → 85 (integer)
-      //   negAmount=100, amts[0]=100, 100-100=0 < 85 → stop
-      //   allowed = 85 - 0 = 85
-      //   Returns (20, 30, 85, 100, true)
-      //
-      // Now neg at 20 has actual=100, allowed=85, excess=15. Partial refund!
+      // desiredMinPos = (20*100)/80 = 25. posTotal(300) >= 25 → yes
+      // desiredMinNeg = (80*300)/20 = 1200. negTotal(100) < 1200 → last iter, cap pos to 25
+      // posAllowed=25M < actual(300M) → excess=275M. Partial refund!
       await market.write.placePrediction([marketId, 20n, toUSDC('100')], {
         account: predictor1.account,
       });
-      await market.write.placePrediction([marketId, 30n, toUSDC('100')], {
+      await market.write.placePrediction([marketId, 80n, toUSDC('300')], {
         account: predictor2.account,
-      });
-
-      // Need a third predictor
-      const {
-        market: m2,
-        predictor1: p1,
-        predictor2: p2,
-        predictor3: p3,
-        marketId: mid,
-      } = await setupMarket();
-      await m2.write.placePrediction([mid, 20n, toUSDC('100')], {
-        account: p1.account,
-      });
-      await m2.write.placePrediction([mid, 30n, toUSDC('100')], {
-        account: p2.account,
-      });
-      await m2.write.placePrediction([mid, 70n, toUSDC('100')], {
-        account: p3.account,
       });
 
       await advanceTime(86401);
 
       const [negPct, posPct, negAmt, posAmt, valid] =
-        await m2.read.calculateMarketSplit([mid]);
+        await market.read.calculateMarketSplit([marketId]);
       expect(valid).to.be.true;
 
-      await m2.write.lockMarket([mid]);
+      await market.write.lockMarket([marketId]);
 
       // Check split boundaries
       const [negPctStored, posPctStored, negAmtStored, posAmtStored] =
-        await m2.read.lockRefunds([mid]);
+        await market.read.lockRefunds([marketId]);
 
-      // Verify at least one boundary has a partial refund
-      const actualNeg = await m2.read.percentageTotals([mid, negPctStored]);
-      const actualPos = await m2.read.percentageTotals([mid, posPctStored]);
+      // Verify positive boundary has a partial refund
+      const actualPos = await market.read.percentageTotals([
+        marketId,
+        posPctStored,
+      ]);
 
-      // One or both sides should have allowed < actual
-      const hasRefund = negAmtStored < actualNeg || posAmtStored < actualPos;
+      const hasRefund = posAmtStored < actualPos;
       expect(hasRefund).to.be.true;
     });
 
@@ -307,12 +270,12 @@ describe('Market Split algorithm (USDC)', function () {
     it('B3: no lock refund when both sides exactly satisfy constraints', async function () {
       const { market, predictor1, predictor2, marketId } = await setupMarket();
 
-      // Two bets where allowed >= actual for both sides → no refunds
-      // bet(40,$100) + bet(60,$100): negAllowed=150 > 100, posAllowed=100 = 100
-      await market.write.placePrediction([marketId, 40n, toUSDC('100')], {
+      // Two bets where both sides are satisfied → no refunds
+      // bet(0,$100) + bet(100,$100): both unconditional, no cap needed
+      await market.write.placePrediction([marketId, 0n, toUSDC('100')], {
         account: predictor1.account,
       });
-      await market.write.placePrediction([marketId, 60n, toUSDC('100')], {
+      await market.write.placePrediction([marketId, 100n, toUSDC('100')], {
         account: predictor2.account,
       });
 
@@ -778,7 +741,8 @@ describe('Market Split algorithm (USDC)', function () {
       // Interesting! The "middle refund" code path in the contract is dead code
       // for this algorithm. Let me just test what actually works.
 
-      // Test: bet(30,$100) + bet(50,$120) + bet(70,$100) — all participate, no middle
+      // bet(30,$100) + bet(50,$120) + bet(70,$100), total=320
+      // With new formula, split=(30,70). Bet at 50 is BETWEEN → full refund.
       await market.write.placePrediction([marketId, 30n, toUSDC('100')], {
         account: predictor1.account,
       });
@@ -795,12 +759,12 @@ describe('Market Split algorithm (USDC)', function () {
         account: dealer1.account,
       });
 
-      // predictor2 at split boundary is NOT refunded — participates on a side
+      // predictor2 at 50% is between boundaries (30, 70) → full refund
       const refund = await market.read.getRefundAmount([
         marketId,
         predictor2.account.address,
       ]);
-      expect(refund).to.equal(0n);
+      expect(refund).to.equal(toUSDC('120'));
     });
   });
 
@@ -824,12 +788,12 @@ describe('Market Split algorithm (USDC)', function () {
         account: dealer1.account,
       });
 
-      // predictor2 wins. Pool=200, fee=2, winnerPool=198. Payout=198.
+      // predictor2 wins. posAllowed=66.67M, poolAfterLock=166.67M, fee=1.67M, winnerPool=165M.
       const payout = await market.read.calculatePayout([
         marketId,
         predictor2.account.address,
       ]);
-      expect(payout).to.equal(198000000n);
+      expect(payout).to.equal(165000000n);
 
       const before = await stakeToken.read.balanceOf([
         predictor2.account.address,
@@ -840,7 +804,7 @@ describe('Market Split algorithm (USDC)', function () {
       const after = await stakeToken.read.balanceOf([
         predictor2.account.address,
       ]);
-      expect(after - before).to.equal(198000000n);
+      expect(after - before).to.equal(165000000n);
     });
 
     it('E2: loser gets zero payout', async function () {
@@ -1169,7 +1133,7 @@ describe('Market Split algorithm (USDC)', function () {
         marketId,
       } = await setupMarket();
 
-      // Simple case: bet(40,$200) + bet(60,$200). No refunds.
+      // bet(40,$200) + bet(60,$200). Positive side capped → lock refund for predictor2.
       await market.write.placePrediction([marketId, 40n, toUSDC('200')], {
         account: predictor1.account,
       });
@@ -1179,6 +1143,25 @@ describe('Market Split algorithm (USDC)', function () {
 
       await advanceTime(86401);
       await market.write.lockMarket([marketId]);
+
+      // Claim lock refund for predictor2 (positive side capped)
+      const lockRefundBefore = await stakeToken.read.balanceOf([
+        predictor2.account.address,
+      ]);
+      const lockRefundAmt = await market.read.getLockRefundAmount([
+        marketId,
+        predictor2.account.address,
+      ]);
+      if (lockRefundAmt > 0n) {
+        await market.write.claimLockRefund([marketId], {
+          account: predictor2.account,
+        });
+      }
+      const lockRefundAfter = await stakeToken.read.balanceOf([
+        predictor2.account.address,
+      ]);
+      const lockRefund = lockRefundAfter - lockRefundBefore;
+
       await market.write.resolveMarket([marketId, true], {
         account: dealer1.account,
       });
@@ -1217,8 +1200,8 @@ describe('Market Split algorithm (USDC)', function () {
       ]);
       const systemFee = ownerAfter - ownerBefore;
 
-      // Total = winnerPayout + dealerFee + systemFee = 400 USDC
-      const totalOut = winnerPayout + dealerFee + systemFee;
+      // Total = winnerPayout + lockRefund + dealerFee + systemFee = 400 USDC
+      const totalOut = winnerPayout + lockRefund + dealerFee + systemFee;
       expect(totalOut).to.equal(toUSDC('400'));
     });
 
@@ -1289,12 +1272,9 @@ describe('Market Split algorithm (USDC)', function () {
       } = await setupMarket();
 
       // bet(10,$500) + bet(50,$100) + bet(90,$100)
-      // normalizedCalc:
-      //   i=0: negTotal=500, posTotal=200. desiredMinPos=(90*500)/10=4500. 200<4500 → reverse
-      //     posPercentage=50, desiredMaxNeg=(50*200)/50=200
-      //     negAmount=500, amts[0]=500, 500-500=0 < 200 → allowed=200
-      //     Returns (10, 50, 200, 100, true)
-      // negAllowed=200 < actual(500). Excess=300. Partial refund at pct=10.
+      // With new formula: desiredMinPos=(10*500)/90=55.5. posTotal(200)>=55 → yes
+      // desiredMinNeg=(50*200)/50=200. negTotal(500)>=200 → yes. MATCH at (10,50).
+      // No refunds — both sides fully satisfied.
       await market.write.placePrediction([marketId, 10n, toUSDC('500')], {
         account: predictor1.account,
       });
@@ -1308,41 +1288,25 @@ describe('Market Split algorithm (USDC)', function () {
       await advanceTime(86401);
       await market.write.lockMarket([marketId]);
 
-      // predictor1 at neg boundary has partial refund
-      // actual=500M, allowed=200M, excess=300M. refund=(500M*300M)/500M=300M.
-      const refund1 = await market.read.getLockRefundAmount([
-        marketId,
-        predictor1.account.address,
-      ]);
-      expect(refund1).to.equal(toUSDC('300'));
-
-      // predictor2 at pos boundary: allowed=100=actual, no refund
+      // No refunds — all amounts within allowed limits
+      expect(
+        await market.read.getLockRefundAmount([
+          marketId,
+          predictor1.account.address,
+        ])
+      ).to.equal(0n);
       expect(
         await market.read.getLockRefundAmount([
           marketId,
           predictor2.account.address,
         ])
       ).to.equal(0n);
-
-      // predictor3 above pos boundary: no refund
       expect(
         await market.read.getLockRefundAmount([
           marketId,
           predictor3.account.address,
         ])
       ).to.equal(0n);
-
-      // Claim lock refund
-      const before = await stakeToken.read.balanceOf([
-        predictor1.account.address,
-      ]);
-      await market.write.claimLockRefund([marketId], {
-        account: predictor1.account,
-      });
-      const after = await stakeToken.read.balanceOf([
-        predictor1.account.address,
-      ]);
-      expect(after - before).to.equal(toUSDC('300'));
 
       // Resolve positive: bets >= 50 win (predictor2 and predictor3)
       await market.write.resolveMarket([marketId, true], {
@@ -1356,9 +1320,9 @@ describe('Market Split algorithm (USDC)', function () {
       expect(await market.read.isWinner([marketId, predictor1.account.address]))
         .to.be.false;
 
-      // Pool after refund: 700M - 300M = 400M. fee=4M. winnerPool=396M.
-      // predictor2 effective=100M, predictor3=100M. totalWin=200M.
-      // Each payout: 100M*396M/200M = 198M.
+      // Pool=700M, no refunds. fee=7M. winnerPool=693M.
+      // predictor2=100M, predictor3=100M. totalWin=200M.
+      // Each payout: 100M*693M/200M = 346.5M.
       const p2Before = await stakeToken.read.balanceOf([
         predictor2.account.address,
       ]);
@@ -1368,7 +1332,7 @@ describe('Market Split algorithm (USDC)', function () {
       const p2After = await stakeToken.read.balanceOf([
         predictor2.account.address,
       ]);
-      expect(p2After - p2Before).to.equal(198000000n);
+      expect(p2After - p2Before).to.equal(346500000n);
     });
   });
 

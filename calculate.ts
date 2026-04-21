@@ -38,7 +38,7 @@ function reverseCalculate(
 
   // sum(negative) <= pNegative * sum(positive) / (100 - pNegative) // maximum negative
   const desiredMaximumNegativeAmount =
-    (positivePercentage * positiveTotal) / (100 - positivePercentage);
+    ((100 - positivePercentage) * positiveTotal) / positivePercentage;
 
   let negativeAmount = negativeTotal;
   for (let i = negativeIndex; i >= 0; i--) {
@@ -48,8 +48,10 @@ function reverseCalculate(
       return {
         negative: {
           percentage: negative.percentage,
-          amount:
-            desiredMaximumNegativeAmount - (negativeAmount - negative.amount),
+          amount: Math.min(
+            negative.amount,
+            desiredMaximumNegativeAmount - (negativeAmount - negative.amount)
+          ),
         },
         positive,
       };
@@ -81,15 +83,21 @@ function normalizedCalculate(
     const desiredMinimumPositiveAmount =
       negativePercentage === 0
         ? 0
-        : ((100 - negativePercentage) * negativeTotal) / negativePercentage;
+        : (negativePercentage * negativeTotal) / (100 - negativePercentage);
+    // sum(negative) >= (pPositive * sum(positive)) / (100 - pPositive);
+    // 100% bettors are unconditionally positive, no constraint on negative side
+    const desiredMinimumNegativeAmount =
+      positivePercentage === 100
+        ? 0
+        : ((100 - positivePercentage) * positiveTotal) / positivePercentage;
+
+    console.log(
+      `[i=${i}] neg=${negativePercentage}%(${negative.amount}) pos=${positivePercentage}%(${positive.amount}) | negTotal=${negativeTotal} posTotal=${positiveTotal} | desiredMinPos=${desiredMinimumPositiveAmount.toFixed(2)} desiredMinNeg=${desiredMinimumNegativeAmount.toFixed(2)} | posTotal>=minPos? ${positiveTotal >= desiredMinimumPositiveAmount} | negTotal>=minNeg? ${negativeTotal >= desiredMinimumNegativeAmount}`
+    );
+
     if (positiveTotal >= desiredMinimumPositiveAmount) {
-      // sum(negative) >= (pPositive * sum(positive)) / (100 - pPositive);
-      // 100% bettors are unconditionally positive, no constraint on negative side
-      const desiredMinimumNegativeAmount =
-        positivePercentage === 100
-          ? 0
-          : (positivePercentage * positiveTotal) / (100 - positivePercentage);
       if (negativeTotal >= desiredMinimumNegativeAmount) {
+        console.log(`  -> MATCH: both sides satisfied`);
         // perfect, let's return it
         return {
           negative,
@@ -98,6 +106,9 @@ function normalizedCalculate(
       } else {
         // negative side is too low
         if (i == percentages.length - 2) {
+          console.log(
+            `  -> LAST ITER: cap positive to ${desiredMinimumPositiveAmount.toFixed(2)}`
+          );
           // This is the last iteration. It means the highest percentage is betting against everyone else
           // positiveAmount < desiredMinimumPositiveAmount, that means we need to cut the negative side
           return {
@@ -108,10 +119,12 @@ function normalizedCalculate(
             },
           };
         } else {
+          console.log(`  -> negative too low, continue loop`);
           // we continue with the loop to increase the negative side
         }
       }
     } else {
+      console.log(`  -> positive too low, reverseCalculate`);
       // positive side is too low, meaning the negative side is too high
       return reverseCalculate(percentages, i, negativeTotal, positiveTotal);
     }
