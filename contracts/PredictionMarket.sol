@@ -18,9 +18,9 @@ import "./OracleResolver.sol";
  *
  * Core Mechanism:
  * - Predictors specify a percentage (0-100) representing their desired odds
- * - After the deadline, anyone can lock the market which calculates the equilibrium
- * - Locking splits bettors into two sides: positive (above equilibrium) and
- *   negative (below equilibrium), partially refunding the overweight side pro-rata
+ * - After the deadline, anyone can lock the market which calculates the market split
+ * - Locking splits bettors into two sides using boundary percentages,
+ *   partially refunding overweight boundary stakes pro-rata
  * - Resolution is binary: the dealer or oracle decides which side (positive/negative) wins
  *
  * Market Lifecycle:
@@ -71,8 +71,8 @@ contract PredictionMarket is
         uint256 createdAt; // Market creation timestamp
         uint256 dealerFeeBps; // DEPRECATED: always 0. Kept for storage layout compatibility with deployed proxies. Fee model now uses contract-level winnerFeeBps + dealerSharePercent.
         MarketStatus status; // Market status
-        bool positiveOutcome; // Whether the positive (above equilibrium) side won
-        uint256 equilibrium; // Calculated equilibrium point (0-100)
+        bool positiveOutcome; // Whether the positive side won
+        uint256 negativeBoundary; // Stored lower boundary percentage (retained for oracle compatibility)
         bytes32 oracleId; // Optional oracle ID for automated resolution
         bytes32 conditionData; // Encoded resolution condition (0x0 = legacy WinLoss)
     }
@@ -87,8 +87,8 @@ contract PredictionMarket is
 
     /// @notice Market split info after locking
     struct LockRefundInfo {
-        uint256 negativePercentage;    // boundary pct for negative side (bets <= this are negative)
-        uint256 positivePercentage;    // boundary pct for positive side (bets >= this are positive)
+        uint256 negativeBoundary;      // lower boundary for the negative side (bets <= this are negative)
+        uint256 positiveBoundary;      // upper boundary for the positive side (bets >= this are positive)
         uint256 negativeAllowedAmount; // max allowed amount at negative boundary (partial refund if actual > this)
         uint256 positiveAllowedAmount; // max allowed amount at positive boundary (partial refund if actual > this)
     }
@@ -153,12 +153,12 @@ contract PredictionMarket is
         uint256 newPercentage
     );
 
-    event MarketLocked(uint256 indexed marketId, uint256 equilibrium);
+    event MarketLocked(uint256 indexed marketId, uint256 negativeBoundary);
 
     event MarketResolved(
         uint256 indexed marketId,
         bool positiveOutcome,
-        uint256 equilibrium
+        uint256 negativeBoundary
     );
 
     event MarketCancelled(uint256 indexed marketId);
@@ -354,7 +354,7 @@ contract PredictionMarket is
             dealerFeeBps: 0, // DEPRECATED: see struct definition
             status: MarketStatus.Active,
             positiveOutcome: false,
-            equilibrium: 0,
+            negativeBoundary: 0,
             oracleId: oracleId,
             conditionData: conditionData
         });
@@ -534,7 +534,7 @@ contract PredictionMarket is
         uint256 pct = prediction.percentage;
 
         // Partial refund at negative boundary
-        if (pct == lockInfo.negativePercentage) {
+        if (pct == lockInfo.negativeBoundary) {
             uint256 actualTotal = percentageTotals[marketId][pct];
             if (actualTotal > lockInfo.negativeAllowedAmount) {
                 uint256 excess = actualTotal - lockInfo.negativeAllowedAmount;
@@ -543,7 +543,7 @@ contract PredictionMarket is
         }
 
         // Partial refund at positive boundary
-        if (pct == lockInfo.positivePercentage) {
+        if (pct == lockInfo.positiveBoundary) {
             uint256 actualTotal = percentageTotals[marketId][pct];
             if (actualTotal > lockInfo.positiveAllowedAmount) {
                 uint256 excess = actualTotal - lockInfo.positiveAllowedAmount;
@@ -559,7 +559,7 @@ contract PredictionMarket is
     /**
      * @notice Resolve a locked market with a binary outcome (dealer only, non-oracle)
      * @param marketId Market ID
-     * @param positiveOutcome true = positive (above equilibrium) side wins, false = negative (below) wins
+     * @param positiveOutcome true = positive side wins, false = negative side wins
      */
     function resolveMarket(uint256 marketId, bool positiveOutcome) external {
         Market storage market = markets[marketId];
@@ -570,13 +570,13 @@ contract PredictionMarket is
         market.status = MarketStatus.Resolved;
         market.positiveOutcome = positiveOutcome;
 
-        emit MarketResolved(marketId, positiveOutcome, market.equilibrium);
+        emit MarketResolved(marketId, positiveOutcome, market.negativeBoundary);
     }
 
     /**
      * @notice Resolve a locked oracle market with a binary outcome (authorized resolver only)
      * @param marketId Market ID
-     * @param positiveOutcome true = positive (above equilibrium) side wins, false = negative (below) wins
+     * @param positiveOutcome true = positive side wins, false = negative side wins
      * @dev The authorized resolver computes the game result off-chain (via sports API)
      *      and submits the outcome directly. No OracleResolver interaction needed.
      */
@@ -589,13 +589,13 @@ contract PredictionMarket is
         market.status = MarketStatus.Resolved;
         market.positiveOutcome = positiveOutcome;
 
-        emit MarketResolved(marketId, positiveOutcome, market.equilibrium);
+        emit MarketResolved(marketId, positiveOutcome, market.negativeBoundary);
     }
 
     /**
      * @notice Resolve a locked market using oracle data (anyone can call)
      * @param marketId Market ID
-     * @dev Oracle returns a percentage (0-100). If it is above the equilibrium,
+     * @dev Oracle returns a percentage (0-100). If it is above the stored lower boundary,
      *      the positive side wins; otherwise the negative side wins.
      * @dev DEPRECATED: Use resolveMarketByResolver for authorized resolver flow
      */
@@ -612,13 +612,13 @@ contract PredictionMarket is
         require(percentage <= 100, "Invalid oracle percentage");
         require(timestamp != 0 && timestamp >= market.deadline, "Oracle data too early");
 
-        // Binary outcome: oracle value above equilibrium → positive side wins
-        bool positiveOutcome = percentage > market.equilibrium;
+        // Binary outcome: oracle value above the stored lower boundary → positive side wins
+        bool positiveOutcome = percentage > market.negativeBoundary;
 
         market.status = MarketStatus.Resolved;
         market.positiveOutcome = positiveOutcome;
 
-        emit MarketResolved(marketId, positiveOutcome, market.equilibrium);
+        emit MarketResolved(marketId, positiveOutcome, market.negativeBoundary);
 
         // Mark oracle data as used
         oracleResolver.markResolved(market.oracleId);
@@ -662,14 +662,14 @@ contract PredictionMarket is
         require(timestamp != 0, "No oracle data");
 
         // percentage is 0 or 100 (from Chainlink result 0 or 1)
-        // 100 > any equilibrium → positive wins
-        // 0 < any equilibrium → negative wins
-        bool positiveOutcome = percentage > market.equilibrium;
+        // 100 > any lower boundary → positive wins
+        // 0 < any lower boundary except 0 → negative wins
+        bool positiveOutcome = percentage > market.negativeBoundary;
 
         market.status = MarketStatus.Resolved;
         market.positiveOutcome = positiveOutcome;
 
-        emit MarketResolved(marketId, positiveOutcome, market.equilibrium);
+        emit MarketResolved(marketId, positiveOutcome, market.negativeBoundary);
 
         // Mark oracle data as used
         oracleResolver.markResolved(market.oracleId);
@@ -918,16 +918,16 @@ contract PredictionMarket is
         LockRefundInfo storage lockInfo = lockRefunds[marketId];
 
         // Bets between boundaries are refunded, not winners
-        if (predicted > lockInfo.negativePercentage && predicted < lockInfo.positivePercentage) {
+        if (predicted > lockInfo.negativeBoundary && predicted < lockInfo.positiveBoundary) {
             return false;
         }
 
         if (market.positiveOutcome) {
             // Positive wins: bets at or above positive boundary
-            return predicted >= lockInfo.positivePercentage;
+            return predicted >= lockInfo.positiveBoundary;
         } else {
             // Negative wins: bets at or below negative boundary
-            return predicted <= lockInfo.negativePercentage;
+            return predicted <= lockInfo.negativeBoundary;
         }
     }
 
@@ -957,7 +957,7 @@ contract PredictionMarket is
         ) {
             LockRefundInfo storage lockInfo = lockRefunds[marketId];
             uint256 pct = prediction.percentage;
-            if (pct > lockInfo.negativePercentage && pct < lockInfo.positivePercentage) {
+            if (pct > lockInfo.negativeBoundary && pct < lockInfo.positiveBoundary) {
                 return prediction.amount;
             }
         }
@@ -996,7 +996,7 @@ contract PredictionMarket is
     }
 
     /**
-     * @notice Claim refund for eligible predictions (equilibrium, cancellation, or abandonment)
+     * @notice Claim refund for eligible predictions (middle-zone, cancellation, or abandonment)
      * @param marketId Market ID
      */
     function claimRefund(uint256 marketId) external nonReentrant {
@@ -1104,7 +1104,7 @@ contract PredictionMarket is
             return 0;
         }
 
-        // Calculate fees on distributable pool (after lock refunds + equilibrium removal)
+        // Calculate fees on distributable pool after lock refunds
         uint256 distributablePool = _getDistributablePool(marketId);
         (uint256 totalFee,,) = _calculateFees(distributablePool);
 
@@ -1140,8 +1140,8 @@ contract PredictionMarket is
 
         // Store split info
         LockRefundInfo storage lockInfo = lockRefunds[marketId];
-        lockInfo.negativePercentage = negPct;
-        lockInfo.positivePercentage = posPct;
+        lockInfo.negativeBoundary = negPct;
+        lockInfo.positiveBoundary = posPct;
         lockInfo.negativeAllowedAmount = negAmt;
         lockInfo.positiveAllowedAmount = posAmt;
 
@@ -1167,8 +1167,8 @@ contract PredictionMarket is
 
         marketPools[marketId] -= totalRefund;
 
-        // Store equilibrium for oracle resolution compatibility
-        market.equilibrium = negPct;
+        // Store the lower boundary for oracle resolution compatibility
+        market.negativeBoundary = negPct;
         market.status = MarketStatus.Locked;
 
         emit MarketLocked(marketId, negPct);
@@ -1185,7 +1185,7 @@ contract PredictionMarket is
         LockRefundInfo storage lockInfo = lockRefunds[marketId];
 
         // Partial refund at negative boundary
-        if (percentage == lockInfo.negativePercentage) {
+        if (percentage == lockInfo.negativeBoundary) {
             uint256 actualTotal = percentageTotals[marketId][percentage];
             if (actualTotal > lockInfo.negativeAllowedAmount) {
                 return (amount * lockInfo.negativeAllowedAmount) / actualTotal;
@@ -1193,7 +1193,7 @@ contract PredictionMarket is
         }
 
         // Partial refund at positive boundary
-        if (percentage == lockInfo.positivePercentage) {
+        if (percentage == lockInfo.positiveBoundary) {
             uint256 actualTotal = percentageTotals[marketId][percentage];
             if (actualTotal > lockInfo.positiveAllowedAmount) {
                 return (amount * lockInfo.positiveAllowedAmount) / actualTotal;
@@ -1223,13 +1223,13 @@ contract PredictionMarket is
             if (amount == 0) continue;
 
             // Skip bets between boundaries (they are refunded)
-            if (i > lockInfo.negativePercentage && i < lockInfo.positivePercentage) continue;
+            if (i > lockInfo.negativeBoundary && i < lockInfo.positiveBoundary) continue;
 
             bool isWinning;
             if (positive) {
-                isWinning = i >= lockInfo.positivePercentage;
+                isWinning = i >= lockInfo.positiveBoundary;
             } else {
-                isWinning = i <= lockInfo.negativePercentage;
+                isWinning = i <= lockInfo.negativeBoundary;
             }
 
             if (isWinning) {
@@ -1251,7 +1251,7 @@ contract PredictionMarket is
 
     /**
      * @notice Calculate fees for a market's distributable pool
-     * @param distributablePool The pool after removing equilibrium stakes
+     * @param distributablePool The pool after removing refunded stakes
      * @return totalFee Total fee amount
      * @return dealerFee Dealer's share of the fee
      * @return systemFee Platform's share of the fee

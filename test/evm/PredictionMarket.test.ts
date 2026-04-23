@@ -274,7 +274,7 @@ describe('PredictionMarket (USDC)', function () {
       const deadline = block.timestamp + 86401n;
 
       await market.write.createMarket(
-        [1n, 1n, 1n, deadline, 'Pre-computed eq', ZERO_ORACLE_ID],
+        [1n, 1n, 1n, deadline, 'Pre-computed split', ZERO_ORACLE_ID],
         { account: dealer1.account }
       );
 
@@ -293,7 +293,7 @@ describe('PredictionMarket (USDC)', function () {
 
       const marketData = await market.read.markets([1n]);
       expect(marketData[8]).to.equal(2); // Resolved
-      expect(marketData[10]).to.equal(40n); // equilibrium = 40
+      expect(marketData[10]).to.equal(40n); // lower boundary = 40
 
       // bet(40,$100) + bet(80,$100): posAllowed = (40*100)/60 = 66.666666
       // poolAfterLock = 200 - (100 - 66.666666) = 166.666666. fee=1.666666. winnerPool=165.
@@ -314,7 +314,7 @@ describe('PredictionMarket (USDC)', function () {
       const deadline = block.timestamp + 86401n;
 
       await market.write.createMarket(
-        [1n, 1n, 1n, deadline, 'Bad eq values', ZERO_ORACLE_ID],
+        [1n, 1n, 1n, deadline, 'Bad split values', ZERO_ORACLE_ID],
         { account: dealer1.account }
       );
 
@@ -379,7 +379,7 @@ describe('PredictionMarket (USDC)', function () {
       const deadline = block.timestamp + 86401n;
 
       await market.write.createMarket(
-        [1n, 1n, 1n, deadline, 'One sided eq', ZERO_ORACLE_ID],
+        [1n, 1n, 1n, deadline, 'One sided split', ZERO_ORACLE_ID],
         { account: dealer1.account }
       );
 

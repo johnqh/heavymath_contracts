@@ -58,7 +58,7 @@
 
 - Currently, all write methods call `writeContract` directly without offering gas estimation.
 - Adding `estimateGas` variants (or an `estimate: boolean` option) for expensive operations like `placePrediction` and `resolveMarket` would help the app layer show gas cost previews to users.
-- This is particularly relevant for the equilibrium calculation in `resolveMarket`, which involves an O(101) on-chain loop.
+- This is particularly relevant for the market-split calculation in `lockMarket`, which involves an O(101) on-chain loop.
 
 ### 8. Add Event Parsing Utilities to the SDK
 

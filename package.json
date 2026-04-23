@@ -1,6 +1,6 @@
 {
   "name": "@sudobility/heavymath_contracts",
-  "version": "0.1.58",
+  "version": "0.1.59",
   "type": "module",
   "main": "dist/unified/src/unified/index.js",
   "types": "dist/unified/src/unified/index.d.ts",
@@ -101,7 +101,7 @@
   ],
   "author": "HeavyMath Team",
   "license": "BUSL-1.1",
-  "description": "Multi-chain prediction market system with UUPS upgradeable contracts, equilibrium-based odds, and unified TypeScript client for EVM chains and Solana.",
+  "description": "Multi-chain prediction market system with UUPS upgradeable contracts, dual-boundary market splits, and a unified TypeScript client for EVM chains and Solana.",
   "homepage": "https://github.com/heavymath/heavymath_contracts#readme",
   "repository": {
     "type": "git",

@@ -6,7 +6,7 @@
  * - totalPool: sum of all amounts (redundant but pre-computed in contract)
  *
  * Output:
- * - TBD: equilibrium, refunds, side assignments, etc.
+ * - TBD: boundary percentages, refunds, side assignments, etc.
  */
 
 interface PercentageAndAmount {

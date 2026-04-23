@@ -36,6 +36,15 @@ export interface CreateMarketParams {
   oracleId?: Address | `0x${string}`;
 }
 
+function formatLockRefundInfo(raw: readonly unknown[]) {
+  return {
+    negativeBoundary: BigInt(raw[0] as bigint),
+    positiveBoundary: BigInt(raw[1] as bigint),
+    negativeAllowedAmount: BigInt(raw[2] as bigint),
+    positiveAllowedAmount: BigInt(raw[3] as bigint),
+  };
+}
+
 export class EVMPredictionClient {
   private readonly abi: Abi;
   private readonly addresses: ContractAddresses;
@@ -313,6 +322,19 @@ export class EVMPredictionClient {
     })) as bigint;
   }
 
+  async getLockRefunds(
+    publicClient: PublicClient,
+    marketId: bigint
+  ): Promise<LockRefundState> {
+    const raw = await publicClient.readContract({
+      address: this.predictionMarketAddress(),
+      abi: this.abi,
+      functionName: 'lockRefunds',
+      args: [marketId],
+    });
+    return formatLockRefundInfo(raw as readonly unknown[]);
+  }
+
   async claimWinnings(
     wallet: WalletContext,
     marketId: bigint
@@ -383,9 +405,10 @@ function formatMarket(raw: readonly unknown[]) {
     dealerFeeBps: BigInt(raw[7] as bigint),
     status: Number(raw[8] as number),
     positiveOutcome: Boolean(raw[9]),
-    equilibrium: BigInt(raw[10] as bigint),
+    negativeBoundary: BigInt(raw[10] as bigint),
     oracleId: raw[11] as `0x${string}`,
   };
 }
 
 export type MarketState = ReturnType<typeof formatMarket>;
+export type LockRefundState = ReturnType<typeof formatLockRefundInfo>;

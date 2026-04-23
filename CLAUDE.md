@@ -4,7 +4,7 @@ This file provides context for Claude Code when working on this project.
 
 ## Project Overview
 
-Multi-chain prediction market smart contracts for EVM chains (with planned Solana support) and a TypeScript SDK. Features a novel percentage-based prediction mechanism with equilibrium-based settlement.
+Multi-chain prediction market smart contracts for EVM chains (with planned Solana support) and a TypeScript SDK. Features a novel percentage-based prediction mechanism with dual-boundary market split settlement.
 
 - **Package**: `@sudobility/heavymath_contracts` (v0.1.12)
 - **Stack**: Solidity 0.8.24, Hardhat, Viem 2, TypeScript
@@ -77,7 +77,7 @@ heavymath_contracts/
 ├── test/evm/                        # Hardhat/Mocha test suites
 │   ├── PredictionMarket.test.ts         # Market lifecycle tests
 │   ├── DealerNFT.test.ts               # NFT permission tests
-│   ├── EquilibriumUSDC.test.ts          # Equilibrium algorithm tests
+│   ├── SplitUSDC.test.ts                # Market split algorithm tests
 │   ├── ClientIntegration.test.ts        # SDK integration tests
 │   └── utils/fixture.ts                # Shared test fixture (deployPredictionFixture)
 ├── scripts/evm/                     # Deployment & upgrade scripts
@@ -136,8 +136,8 @@ The package has multiple entry points for different environments:
 4. After deadline, resolution occurs via one of:
    - `resolveMarket()` - manual by dealer (only for non-oracle markets, oracleId == bytes32(0))
    - `resolveMarketWithOracle()` - anyone can call (for oracle-configured markets)
-   - Auto-cancellation if one-sided market (no liquidity on both sides of equilibrium)
-5. After resolution: winners call `claimWinnings()`, equilibrium/cancelled/abandoned predictors call `claimRefund()`
+   - Locking reverts if no valid two-sided market split exists
+5. After resolution: winners call `claimWinnings()`, refunded/cancelled/abandoned predictors call `claimRefund()`
 6. If unresolved after deadline + 24h RESOLUTION_GRACE_PERIOD: anyone can call `abandonMarket()` -> full refunds
 
 **All external/public functions:**
@@ -154,11 +154,11 @@ The package has multiple entry points for different environments:
 - `cancelMarket(marketId)` - dealer or owner, only if no predictions exist (pool == 0)
 - `abandonMarket(marketId)` - anyone, after deadline + 24h grace
 - `claimWinnings(marketId)` - winners claim proportional share of winner pool
-- `claimRefund(marketId)` - equilibrium/cancelled/abandoned predictors get full refund
+- `claimRefund(marketId)` - refunded/cancelled/abandoned predictors get full refund
 - `withdrawDealerFees(marketId)` - dealer withdraws fees from resolved market
 - `withdrawSystemFees()` - owner withdraws accumulated system fees
 - `pause()` / `unpause()` - owner only, affects createMarket, placePrediction, updatePrediction
-- `calculateEquilibrium(marketId)` - view, O(101) linear search
+- `calculateMarketSplit(marketId)` - view, O(101) scan across occupied percentage points
 - `isWinner(marketId, predictor)` - view, checks if predictor is on winning side
 - `getRefundAmount(marketId, predictor)` - view, returns refund amount
 - `calculatePayout(marketId, predictor)` - view, returns payout for a winner
@@ -224,29 +224,28 @@ The package has multiple entry points for different environments:
 
 - Re-exports OpenZeppelin's ERC1967Proxy so Hardhat/viem can deploy it by name
 
-## Core Algorithm: Equilibrium Calculation
+## Core Algorithm: Market Split Calculation
 
 The prediction mechanism uses percentage-based odds (0-100), not binary bets.
 
-**Algorithm** (`calculateEquilibrium`): O(101) linear search over points 1-99
+**Algorithm** (`calculateMarketSplit`): O(101) scan across occupied percentage points
 
-1. Build cumulative totals for each percentage point (0-100)
-2. For each point p (1 to 99): compute `below * (100 - p)` vs `above * p`
-3. Return p with minimal absolute difference (best equilibrium)
-4. Skip points where both below and above are zero
+1. Build the ordered set of occupied percentage points
+2. Scan adjacent candidate boundaries while tracking negative-side and positive-side capital
+3. Apply the bidirectional capital-adequacy constraints
+4. Return the two split boundaries plus any capped boundary amounts
 
 **Settlement** (`_finalizeResolution`):
 
-1. Calculate equilibrium point
-2. Check `_hasTwoSidedMarket()` - if one-sided (all bets on same side) -> auto-cancel, all refunded
-3. If outcome > equilibrium -> predictors above equilibrium win
-4. If outcome < equilibrium -> predictors below equilibrium win
-5. If outcome == equilibrium -> all refunded (no winners)
-6. Predictors at exact equilibrium point are always refunded regardless of outcome
+1. Calculate the market split
+2. Lock the market by refunding the middle zone and trimming overweight boundary stakes
+3. If outcome resolves positive -> predictors at or above the positive boundary win
+4. If outcome resolves negative -> predictors at or below the negative boundary win
+5. Middle-zone predictions remain refundable regardless of outcome
 
 **Fee calculation** (in `_calculateFees` / `calculatePayout`):
 
-- `distributablePool` = totalPool - equilibriumAmount (stakes at exact equilibrium excluded)
+- `distributablePool` = totalPool after middle-zone refunds and boundary trimming
 - `totalFee` = distributablePool \* winnerFeeBps / 10000 (default 1%)
 - `dealerFee` = totalFee \* dealerSharePercent / 100 (default 50% of totalFee)
 - `systemFee` = totalFee - dealerFee (remainder goes to platform)
@@ -283,7 +282,7 @@ const client = new EVMPredictionClient({
 | `resolveMarket(wallet, marketId, resolution)`                         | Manual resolution by dealer                                            |
 | `resolveMarketWithOracle(wallet, marketId)`                           | Oracle-based resolution                                                |
 | `claimWinnings(wallet, marketId)`                                     | Claim winnings from resolved market                                    |
-| `claimRefund(wallet, marketId)`                                       | Claim refund (equilibrium/cancelled/abandoned)                         |
+| `claimRefund(wallet, marketId)`                                       | Claim refund (middle-zone/cancelled/abandoned)                         |
 | `withdrawDealerFees(wallet, marketId)`                                | Withdraw dealer fees                                                   |
 | `withdrawSystemFees(wallet)`                                          | Withdraw system fees (owner)                                           |
 | `getMarket(publicClient, marketId)`                                   | Read market state (view)                                               |
@@ -475,7 +474,7 @@ heavymath_indexer    (indexes contract events into PostgreSQL)
        ↓ REST/GraphQL/SSE API
 heavymath_indexer_client  (React hooks + IndexerClient HTTP class)
        ↓ hooks + types
-heavymath_lib        (sports+favorites hooks, off-chain equilibrium calc)
+heavymath_lib        (sports+favorites hooks, off-chain market-split calc)
        ↓ business logic
 heavymath_app        (React + Vite web frontend)
 ```

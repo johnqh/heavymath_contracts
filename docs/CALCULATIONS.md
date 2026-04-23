@@ -61,4 +61,4 @@ let positive = staking[i + 1];
 
 ## Tests
 
-When we write code, we need to create test cases for the calculation. The calculations should always contain a list of bets, which include both a probability and an amount. Then we should calculate the equilibrium and remove some bets, and all remaining will be either on the negative or the positive side. Finally, we should verify all remaining bets would get higher than expected payout.
+When we write code, we need to create test cases for the calculation. The calculations should always contain a list of bets, which include both a probability and an amount. Then we should calculate the market split and remove or trim bets as required, and all remaining will be either on the negative or the positive side. Finally, we should verify all remaining bets would get higher than expected payout.

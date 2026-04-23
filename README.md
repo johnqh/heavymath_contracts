@@ -1,6 +1,6 @@
 # @sudobility/heavymath_contracts
 
-Multi-chain prediction market smart contracts and TypeScript SDK for EVM chains. Features a percentage-based prediction mechanism with equilibrium-based settlement.
+Multi-chain prediction market smart contracts and TypeScript SDK for EVM chains. Features a percentage-based prediction mechanism with dual-boundary market split settlement.
 
 ## Installation
 
@@ -47,8 +47,8 @@ Three UUPS-upgradeable Solidity 0.8.24 contracts:
 
 1. Dealers create markets with a deadline
 2. Users place predictions at a percentage (0-100) with USDC
-3. At deadline, equilibrium is calculated across the percentage spectrum
-4. Winners (on the correct side of equilibrium) share the losers' stakes proportionally
+3. At deadline, the market split is calculated across the percentage spectrum
+4. Winners on the resolved side of the split share the losing side's effective stakes proportionally
 5. Fees: winner fee (default 1%, max 10%) split between dealer and platform (default 50/50)
 
 ## Development

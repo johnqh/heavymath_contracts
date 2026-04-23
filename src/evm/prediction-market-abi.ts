@@ -281,7 +281,7 @@ export const PREDICTION_MARKET_ABI = [
       {
         indexed: false,
         internalType: 'uint256',
-        name: 'equilibrium',
+        name: 'negativeBoundary',
         type: 'uint256',
       },
     ],
@@ -306,7 +306,7 @@ export const PREDICTION_MARKET_ABI = [
       {
         indexed: false,
         internalType: 'uint256',
-        name: 'equilibrium',
+        name: 'negativeBoundary',
         type: 'uint256',
       },
     ],
@@ -901,12 +901,12 @@ export const PREDICTION_MARKET_ABI = [
     outputs: [
       {
         internalType: 'uint256',
-        name: 'negativePercentage',
+        name: 'negativeBoundary',
         type: 'uint256',
       },
       {
         internalType: 'uint256',
-        name: 'positivePercentage',
+        name: 'positiveBoundary',
         type: 'uint256',
       },
       {
@@ -1017,7 +1017,7 @@ export const PREDICTION_MARKET_ABI = [
       },
       {
         internalType: 'uint256',
-        name: 'equilibrium',
+        name: 'negativeBoundary',
         type: 'uint256',
       },
       {

@@ -74,7 +74,7 @@ async function main() {
   console.log(`\nMarket ${marketId}:`);
   console.log(`  Status: ${market.status} (4=Locked)`);
   console.log(`  OracleId: ${oracleId}`);
-  console.log(`  Equilibrium: ${market.equilibrium}`);
+  console.log(`  Negative boundary: ${market.negativeBoundary}`);
 
   if (
     oracleId ===

@@ -5,6 +5,7 @@ import {
   type TransactionResult,
   type CreateMarketParams,
   type MarketState,
+  type LockRefundState,
 } from '../evm';
 
 /**
@@ -30,4 +31,5 @@ export type {
   TransactionResult,
   CreateMarketParams,
   MarketState,
+  LockRefundState,
 };

@@ -176,7 +176,7 @@ describe('Market Split algorithm (USDC)', function () {
 
       await market.write.lockMarket([marketId]);
 
-      // equilibrium field stores negPct
+      // stored lower boundary field stores negPct
       const [, , , , , , , , , , storedEq] = await market.read.markets([
         marketId,
       ]);
