@@ -315,7 +315,7 @@ const client = new EVMPredictionClient({
 | `placePrediction(wallet, marketId, percentage, amount)`               | Place prediction (auto-approves ERC20, validates 0-100)                |
 | `updatePrediction(wallet, marketId, newPercentage, additionalAmount)` | Update prediction before deadline (auto-approves if additional amount) |
 | `withdrawPrediction(wallet, marketId)`                                | Withdraw prediction before deadline                                    |
-| `lockMarket(wallet, marketId)`                                        | Lock market after deadline (calculates split, processes refunds)        |
+| `lockMarket(wallet, marketId)`                                        | Lock market after deadline (calculates split, processes refunds)       |
 | `cancelMarket(wallet, marketId)`                                      | Cancel market (no predictions)                                         |
 | `abandonMarket(wallet, marketId)`                                     | Abandon unresolved market after grace                                  |
 | `resolveMarket(wallet, marketId, positiveOutcome)`                    | Manual resolution by dealer                                            |
