@@ -6,7 +6,7 @@ This file provides context for Claude Code when working on this project.
 
 Multi-chain prediction market smart contracts for EVM chains (with planned Solana support) and a TypeScript SDK. Features a novel percentage-based prediction mechanism with dual-boundary market split settlement.
 
-- **Package**: `@sudobility/heavymath_contracts` (v0.1.12)
+- **Package**: `@sudobility/heavymath_contracts`
 - **Stack**: Solidity 0.8.24, Hardhat, Viem 2, TypeScript
 - **License**: See LICENSE.md (BUSL-1.1)
 - **Package manager**: Bun (required)
@@ -62,12 +62,13 @@ bun run clean                  # npx hardhat clean
 ```
 heavymath_contracts/
 ├── contracts/                       # Solidity source
-│   ├── PredictionMarket.sol             # Core market logic (875 lines, UUPS upgradeable)
-│   ├── DealerNFT.sol                    # ERC721 license system (213 lines, UUPS upgradeable)
-│   ├── OracleResolver.sol               # Oracle integration (256 lines, UUPS upgradeable)
+│   ├── PredictionMarket.sol             # Core market logic (~1293 lines, UUPS upgradeable)
+│   ├── DealerNFT.sol                    # ERC721 license system (~306 lines, UUPS upgradeable)
+│   ├── OracleResolver.sol               # Oracle + Chainlink integration (~466 lines, UUPS upgradeable)
 │   ├── MockUSDC.sol                     # Test ERC20 token (6 decimals, 21 lines)
 │   ├── ERC1967Proxy.sol                 # Re-exports OZ ERC1967Proxy for deploy/test use
 │   └── interfaces/                      # Empty - reserved for future interface extractions
+├── calculate.ts                     # TypeScript reference implementation of market split algorithm
 ├── src/                             # TypeScript SDK
 │   ├── evm/index.ts                     # EVMPredictionClient (full implementation)
 │   ├── unified/index.ts                 # PredictionClient (wraps EVMPredictionClient)
@@ -111,7 +112,7 @@ The package has multiple entry points for different environments:
 
 ## Smart Contracts
 
-### PredictionMarket.sol (Core - ~968 lines)
+### PredictionMarket.sol (Core - ~1293 lines)
 
 **Inheritance chain:**
 `Initializable` -> `OwnableUpgradeable` -> `PausableUpgradeable` -> `UUPSUpgradeable` -> `ReentrancyGuardUpgradeable`
@@ -126,35 +127,49 @@ The package has multiple entry points for different environments:
 - `winnerFeeBps` = 100 (1% default, max 1000 = 10%) — fee on the distributable pool
 - `dealerSharePercent` = 50 (50% default) — dealer's share of the fee; remainder goes to platform
 
-**Market status enum:** `Active` (0), `Cancelled` (1), `Resolved` (2), `Abandoned` (3)
+**Market status enum:** `Active` (0), `Cancelled` (1), `Resolved` (2), `Abandoned` (3), `Locked` (4)
 
 **Market lifecycle:**
 
 1. Dealer creates market (must own DealerNFT with valid permissions) -> status = `Active`
+   - `createMarket()` for basic markets, `createMarketWithCondition()` for markets with oracle condition data
 2. Predictors place predictions with percentage (0-100) and USDC amount before deadline
 3. Predictors can update or withdraw their predictions any time before the market deadline
-4. After deadline, resolution occurs via one of:
+4. After deadline, **locking** must occur before resolution:
+   - `lockMarket(marketId)` - anyone can call after deadline; calculates market split, refunds middle-zone, trims boundary stakes -> status = `Locked`
+   - Reverts if no valid two-sided market split exists
+5. After locking, resolution occurs via one of:
    - `resolveMarket()` - manual by dealer (only for non-oracle markets, oracleId == bytes32(0))
-   - `resolveMarketWithOracle()` - anyone can call (for oracle-configured markets)
-   - Locking reverts if no valid two-sided market split exists
-5. After resolution: winners call `claimWinnings()`, refunded/cancelled/abandoned predictors call `claimRefund()`
-6. If unresolved after deadline + 24h RESOLUTION_GRACE_PERIOD: anyone can call `abandonMarket()` -> full refunds
+   - `resolveMarketByResolver()` - by authorized resolver address
+   - `resolveMarketWithOracle()` - anyone can call (uses oracle data directly)
+   - `requestOracleResolution()` + `completeOracleResolution()` - async Chainlink flow
+6. After resolution: winners call `claimWinnings()`, lock-refunded predictors call `claimLockRefund()`, cancelled/abandoned predictors call `claimRefund()`
+7. If unresolved after deadline + 24h RESOLUTION_GRACE_PERIOD: anyone can call `abandonMarket()` -> full refunds
 
 **All external/public functions:**
 
 - `initialize(dealerNFT, oracleResolver, stakeToken)` - proxy initializer
-- `createMarket(tokenId, category, subCategory, deadline, description, oracleId)` -> returns marketId
+- `setTestMode(testMode)` - owner only, enables test mode (bypasses time checks)
+- `setAuthorizedResolver(resolver)` - owner only, sets authorized resolver address
 - `setWinnerFeeBps(feeBps)` - owner sets global winner fee (max 1000 = 10%)
 - `setDealerSharePercent(percent)` - owner sets dealer's share of fee (0-100%)
+- `createMarket(tokenId, category, subCategory, deadline, description, oracleId)` -> returns marketId
+- `createMarketWithCondition(tokenId, category, subCategory, deadline, description, oracleId, conditionData)` -> returns marketId
 - `placePrediction(marketId, percentage, amount)` - percentage 0-100, transfers ERC20 via SafeERC20
 - `updatePrediction(marketId, newPercentage, additionalAmount)` - update prediction before deadline
 - `withdrawPrediction(marketId)` - full withdrawal before deadline
-- `resolveMarket(marketId, resolution)` - manual resolution by dealer (non-oracle markets only)
+- `lockMarket(marketId)` - anyone can call after deadline, calculates split + processes refunds -> status `Locked`
+- `claimLockRefund(marketId)` - claim partial/full refund from lock (middle-zone or boundary trimming)
+- `getLockRefundAmount(marketId, predictor)` - view, returns lock refund amount for a predictor
+- `resolveMarket(marketId, positiveOutcome)` - manual resolution by dealer (non-oracle markets only)
+- `resolveMarketByResolver(marketId, positiveOutcome)` - resolution by authorized resolver address
 - `resolveMarketWithOracle(marketId)` - automated oracle resolution (anyone can call)
+- `requestOracleResolution(marketId)` - initiates async Chainlink resolution request
+- `completeOracleResolution(marketId)` - completes resolution after Chainlink callback
 - `cancelMarket(marketId)` - dealer or owner, only if no predictions exist (pool == 0)
 - `abandonMarket(marketId)` - anyone, after deadline + 24h grace
 - `claimWinnings(marketId)` - winners claim proportional share of winner pool
-- `claimRefund(marketId)` - refunded/cancelled/abandoned predictors get full refund
+- `claimRefund(marketId)` - cancelled/abandoned predictors get full refund
 - `withdrawDealerFees(marketId)` - dealer withdraws fees from resolved market
 - `withdrawSystemFees()` - owner withdraws accumulated system fees
 - `pause()` / `unpause()` - owner only, affects createMarket, placePrediction, updatePrediction
@@ -177,15 +192,21 @@ The package has multiple entry points for different environments:
 - `dealerFees`, `systemFees` (mapping uint256 => uint256)
 - `totalSystemFees` (uint256)
 
-### DealerNFT.sol (~283 lines)
+### DealerNFT.sol (~306 lines)
 
 **Inheritance chain:**
 `Initializable` -> `ERC721Upgradeable` -> `ERC721EnumerableUpgradeable` -> `OwnableUpgradeable` -> `UUPSUpgradeable`
 
 - ERC721 NFT-based licensing for market creation (name: "DealerLicense", symbol: "DLICENSE")
+- **Public minting**: anyone can mint by paying `mintPrice` in the stake token (USDC)
 - Permission system with category/subcategory validation
 - Wildcard constant: `WILDCARD = 0xFF` means "all categories" or "all subcategories"
-- `mint(to, tokenId)` - owner only
+- `initialize(mintPrice)` - proxy initializer, sets initial mint price
+- `setDefaultPermissions(category, subCategories[])` - owner only, sets permissions auto-granted on mint
+- `setStakeToken(stakeToken)` - owner only, sets ERC20 token used for minting payment
+- `mint()` - anyone can call, pays `mintPrice` in stake token, auto-assigns next tokenId + default permissions
+- `setMintPrice(mintPrice)` - owner only, updates mint price
+- `withdrawPayments()` - owner only, withdraws collected mint payments
 - `setPermissions(tokenId, category, subCategories[])` - owner only, additive
 - `hasPermissions(tokenId)` - view, checks if any permissions set
 - `validatePermission(tokenId, category, subCategory)` - view, checks specific permission
@@ -198,7 +219,7 @@ The package has multiple entry points for different environments:
 
 **Storage gap:** `uint256[48] private __gap`
 
-### OracleResolver.sol (~273 lines)
+### OracleResolver.sol (~466 lines)
 
 **Inheritance chain:**
 `Initializable` -> `OwnableUpgradeable` -> `UUPSUpgradeable`
@@ -207,10 +228,19 @@ The package has multiple entry points for different environments:
 - `registerOracle(oracleId, oracleType, dataSource, minValue, maxValue, stalePeriod)` - owner only
 - `updateOracleData(oracleId, value)` - authorized updaters or owner, CustomData type only
 - `getOracleData(oracleId)` -> (percentage, timestamp, isValid) - staleness check
+- `setPredictionMarket(predictionMarket)` - owner only, sets authorized PredictionMarket contract
 - `markResolved(oracleId)` - called by PredictionMarket or owner after resolution (access-controlled via `predictionMarket` address)
+- `registerOracleForMarket(oracleId)` - registers an oracle specifically for a market
 - `setAuthorizedUpdater(updater, authorized)` - owner only
 - `deactivateOracle(oracleId)` - owner only
 - Normalizes raw values to 0-100 percentage range: `(value - min) * 100 / (max - min)`
+
+**Chainlink Functions integration:**
+
+- `setChainlinkConfig(token, oracle, jobId, fee, apiBaseUrl)` - owner only, configures Chainlink parameters
+- `requestResolution(marketId, oracleId)` - sends Chainlink HTTP request to `{apiBaseUrl}{chainId}-{marketId}/resolve`; returns requestId
+- `fulfillResolution(requestId, result)` - Chainlink callback, stores result as percentage (0 = negative, 100 = positive)
+- `withdrawLink(to, amount)` - owner only, withdraws LINK tokens
 
 **Storage gap:** `uint256[50] private __gap`
 
@@ -235,13 +265,20 @@ The prediction mechanism uses percentage-based odds (0-100), not binary bets.
 3. Apply the bidirectional capital-adequacy constraints
 4. Return the two split boundaries plus any capped boundary amounts
 
-**Settlement** (`_finalizeResolution`):
+**Reference implementation:** `calculate.ts` at project root is a TypeScript implementation of the same algorithm, useful for off-chain simulation and testing.
 
-1. Calculate the market split
-2. Lock the market by refunding the middle zone and trimming overweight boundary stakes
-3. If outcome resolves positive -> predictors at or above the positive boundary win
-4. If outcome resolves negative -> predictors at or below the negative boundary win
-5. Middle-zone predictions remain refundable regardless of outcome
+**Locking** (`lockMarket` -> `_processLockRefunds`):
+
+1. Calculate the market split boundaries
+2. Refund middle-zone predictions (between boundaries) in full
+3. Trim overweight boundary stakes (partial refunds via `claimLockRefund()`)
+4. Market transitions to `Locked` status
+
+**Settlement** (`resolveMarket` / `resolveMarketWithOracle` / etc.):
+
+1. Market must be in `Locked` status
+2. If outcome resolves positive -> predictors at or above the positive boundary win
+3. If outcome resolves negative -> predictors at or below the negative boundary win
 
 **Fee calculation** (in `_calculateFees` / `calculatePayout`):
 
@@ -267,24 +304,32 @@ const client = new EVMPredictionClient({
 });
 ```
 
-**All methods (14 write + 2 read):**
+**All methods (19 write + 6 read):**
 
 | Method                                                                | Description                                                            |
 | --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | `createMarket(wallet, params)`                                        | Create a new prediction market                                         |
+| `setTestMode(wallet, testMode)`                                       | Enable/disable test mode (owner)                                       |
 | `setWinnerFeeBps(wallet, feeBps)`                                     | Set global winner fee in basis points (owner)                          |
 | `setDealerSharePercent(wallet, percent)`                              | Set dealer's share of fee as percentage (owner)                        |
 | `placePrediction(wallet, marketId, percentage, amount)`               | Place prediction (auto-approves ERC20, validates 0-100)                |
 | `updatePrediction(wallet, marketId, newPercentage, additionalAmount)` | Update prediction before deadline (auto-approves if additional amount) |
 | `withdrawPrediction(wallet, marketId)`                                | Withdraw prediction before deadline                                    |
+| `lockMarket(wallet, marketId)`                                        | Lock market after deadline (calculates split, processes refunds)        |
 | `cancelMarket(wallet, marketId)`                                      | Cancel market (no predictions)                                         |
 | `abandonMarket(wallet, marketId)`                                     | Abandon unresolved market after grace                                  |
-| `resolveMarket(wallet, marketId, resolution)`                         | Manual resolution by dealer                                            |
-| `resolveMarketWithOracle(wallet, marketId)`                           | Oracle-based resolution                                                |
+| `resolveMarket(wallet, marketId, positiveOutcome)`                    | Manual resolution by dealer                                            |
+| `resolveMarketWithOracle(wallet, marketId)`                           | Oracle-based resolution (sync)                                         |
+| `requestOracleResolution(wallet, marketId)`                           | Initiate async Chainlink resolution                                    |
+| `completeOracleResolution(wallet, marketId)`                          | Complete resolution after Chainlink callback                           |
+| `claimLockRefund(wallet, marketId)`                                   | Claim refund from lock (middle-zone/boundary trimming)                 |
 | `claimWinnings(wallet, marketId)`                                     | Claim winnings from resolved market                                    |
-| `claimRefund(wallet, marketId)`                                       | Claim refund (middle-zone/cancelled/abandoned)                         |
+| `claimRefund(wallet, marketId)`                                       | Claim refund (cancelled/abandoned)                                     |
 | `withdrawDealerFees(wallet, marketId)`                                | Withdraw dealer fees                                                   |
 | `withdrawSystemFees(wallet)`                                          | Withdraw system fees (owner)                                           |
+| `calculateMarketSplit(publicClient, marketId)`                        | Read market split boundaries (view)                                    |
+| `getLockRefundAmount(publicClient, marketId, predictor)`              | Read lock refund amount for predictor (view)                           |
+| `getLockRefunds(publicClient, marketId)`                              | Read all lock refund data (view)                                       |
 | `getMarket(publicClient, marketId)`                                   | Read market state (view)                                               |
 | `getPrediction(publicClient, marketId, account)`                      | Read prediction (view)                                                 |
 
@@ -402,13 +447,15 @@ Note: `@openzeppelin/hardhat-upgrades` and `hardhat-chai-matchers` are commented
 `deployPredictionFixture()` sets up the full test environment:
 
 1. Gets 6 wallet clients from Hardhat: `[owner, dealer1, dealer2, predictor1, predictor2, predictor3]`
-2. Deploys DealerNFT as UUPS proxy, mints token #1 to dealer1, token #2 to dealer2
-3. Sets permissions: token #1 gets category 1 with wildcard subcategories (0xFF); token #2 gets category 1 with subcategories [1, 2]
-4. Deploys OracleResolver as UUPS proxy
-5. Deploys MockUSDC (6 decimals)
-6. Deploys PredictionMarket as UUPS proxy (initialized with dealerNFT, oracleResolver, mockUSDC)
-7. Mints 100,000 USDC to each of [dealer1, dealer2, predictor1, predictor2, predictor3]
-8. Approves PredictionMarket to spend 100,000 USDC for each wallet
+2. Deploys DealerNFT as UUPS proxy with free minting (mintPrice = 0)
+3. Deploys MockUSDC (6 decimals), sets as DealerNFT stake token
+4. Mints dealer licenses for dealer1 and dealer2
+5. Sets permissions: token #1 gets category 1 with wildcard subcategories (0xFF); token #2 gets category 1 with subcategories [1, 2]
+6. Deploys OracleResolver as UUPS proxy
+7. Deploys PredictionMarket as UUPS proxy (initialized with dealerNFT, oracleResolver, mockUSDC)
+8. Registers PredictionMarket as authorized caller on OracleResolver (`setPredictionMarket()`)
+9. Mints 100,000 USDC to each of [dealer1, dealer2, predictor1, predictor2, predictor3]
+10. Approves PredictionMarket to spend 100,000 USDC for each wallet
 
 Returns: `{ market, dealerNFT, oracleResolver, stakeToken, owner, dealer1, dealer2, predictor1, predictor2, predictor3, publicClient }`
 
@@ -467,7 +514,7 @@ Also exports:
 
 This package is the **foundation** of the Heavymath prediction market platform. Changes here cascade downstream:
 
-```
+```text
 heavymath_contracts  ← YOU ARE HERE
        ↓ ABIs, types, EVMPredictionClient SDK
 heavymath_indexer    (indexes contract events into PostgreSQL)
