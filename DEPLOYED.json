@@ -20,6 +20,22 @@
         "upgradedAt": "2026-04-21T07:07:50.198Z"
       }
     },
+    "arbitrumSepolia": {
+      "deployedAt": "2026-05-15T00:00:00.000Z",
+      "deployer": "0x1996d64d8f6e47a5bf6fb92246ef4efd6ae881e0",
+      "stakeToken": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+      "owner": "0x1996d64d8f6e47a5bf6fb92246ef4efd6ae881e0",
+      "dealerNFT": {
+        "proxy": "0x76874d65243c3a1c1693714e6fd4039127c04845"
+      },
+      "oracleResolver": {
+        "proxy": "0x9c292cc21d08544380bce43aa3df838b9538167a"
+      },
+      "predictionMarket": {
+        "proxy": "0x0005cb39f4dff71a8307bacac03884aba6fd178f"
+      },
+      "dealerNFTMinted": "tokenId 1 to deployer"
+    },
     "hardhat": {
       "deployedAt": "2026-04-20T23:34:53.496Z",
       "deployer": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",

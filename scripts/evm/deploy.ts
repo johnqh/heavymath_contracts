@@ -73,6 +73,17 @@ async function main() {
   await oracleResolver.write.setPredictionMarket([predictionProxy.address]);
   console.log('🔗 OracleResolver.setPredictionMarket set to PredictionMarket');
 
+  // Auto-mint Dealer NFT to deployer (tokenId=1)
+  console.log('🏷️  Setting up Dealer NFT for deployer...');
+  await dealerNFT.write.setDefaultPermissions([0xFF, [0xFF]]);
+  console.log('   Default permissions set (all categories/subcategories)');
+  await dealerNFT.write.setStakeToken([usdcAddress as `0x${string}`]);
+  console.log('   Stake token set to USDC');
+  await dealerNFT.write.setMintPrice([0n]);
+  console.log('   Mint price set to 0');
+  await dealerNFT.write.mint();
+  console.log('✅ Dealer NFT minted to deployer, tokenId: 1');
+
   // Configure Chainlink Any API (if env vars are set)
   const linkToken = process.env.LINK_TOKEN_ADDRESS;
   const chainlinkOracle = process.env.CHAINLINK_ORACLE_ADDRESS;

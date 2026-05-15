@@ -81,6 +81,12 @@ const config: HardhatUserConfig = {
       chainId: 42161,
       gasPrice: "auto",
     },
+    arbitrumSepolia: {
+      url: "https://sepolia-rollup.arbitrum.io/rpc",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      chainId: 421614,
+      gasPrice: "auto",
+    },
 
     // Base Networks
     base: {
@@ -97,6 +103,7 @@ const config: HardhatUserConfig = {
       polygon: process.env.ETHERSCAN_MULTICHAIN_API_KEY || process.env.POLYGONSCAN_API_KEY || "",
       optimisticEthereum: process.env.ETHERSCAN_MULTICHAIN_API_KEY || process.env.OPTIMISTIC_ETHERSCAN_API_KEY || "",
       arbitrumOne: process.env.ETHERSCAN_MULTICHAIN_API_KEY || process.env.ARBISCAN_API_KEY || "",
+      arbitrumSepolia: process.env.ETHERSCAN_MULTICHAIN_API_KEY || process.env.ARBISCAN_API_KEY || "",
       base: process.env.ETHERSCAN_MULTICHAIN_API_KEY || process.env.BASESCAN_API_KEY || "",
     },
     customChains: [
@@ -106,6 +113,14 @@ const config: HardhatUserConfig = {
         urls: {
           apiURL: "https://api.basescan.org/api",
           browserURL: "https://basescan.org"
+        }
+      },
+      {
+        network: "arbitrumSepolia",
+        chainId: 421614,
+        urls: {
+          apiURL: "https://api-sepolia.arbiscan.io/api",
+          browserURL: "https://sepolia.arbiscan.io"
         }
       }
     ]
