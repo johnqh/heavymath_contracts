@@ -75,7 +75,7 @@ async function main() {
 
   // Auto-mint Dealer NFT to deployer (tokenId=1)
   console.log('🏷️  Setting up Dealer NFT for deployer...');
-  await dealerNFT.write.setDefaultPermissions([0xFF, [0xFF]]);
+  await dealerNFT.write.setDefaultPermissions([0xff, [0xff]]);
   console.log('   Default permissions set (all categories/subcategories)');
   await dealerNFT.write.setStakeToken([usdcAddress as `0x${string}`]);
   console.log('   Stake token set to USDC');
