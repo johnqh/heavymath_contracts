@@ -23,16 +23,20 @@
     "arbitrumSepolia": {
       "deployedAt": "2026-05-15T00:00:00.000Z",
       "deployer": "0x1996d64d8f6e47a5bf6fb92246ef4efd6ae881e0",
-      "stakeToken": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+      "stakeToken": "0x132ea4b483b83c598df18f02c93cd6dc783bccc4",
+      "stakeTokenName": "MockUSDC (mUSDC, 6 decimals, owner-mintable)",
       "owner": "0x1996d64d8f6e47a5bf6fb92246ef4efd6ae881e0",
+      "mockUSDC": {
+        "address": "0x132ea4b483b83c598df18f02c93cd6dc783bccc4"
+      },
       "dealerNFT": {
-        "proxy": "0x76874d65243c3a1c1693714e6fd4039127c04845"
+        "proxy": "0xe7ae5f67a51b65159c967d70395dcd78d0e4100b"
       },
       "oracleResolver": {
-        "proxy": "0x9c292cc21d08544380bce43aa3df838b9538167a"
+        "proxy": "0x54d7a17145332a38b329afe0ff1f92ec2583f67d"
       },
       "predictionMarket": {
-        "proxy": "0x0005cb39f4dff71a8307bacac03884aba6fd178f"
+        "proxy": "0x12e3c2199b83f653436339293df5982872b89561"
       },
       "dealerNFTMinted": "tokenId 1 to deployer"
     },
