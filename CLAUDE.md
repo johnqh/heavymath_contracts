@@ -93,7 +93,7 @@ heavymath_contracts/
 ├── tsconfig.unified.json            # Unified build (dist/unified) - includes evm, solana, react
 ├── tsconfig.react-native.json       # React Native build (dist/react-native) - jsx: react-native
 ├── tsconfig.test.json               # Test build config
-├── DEPLOYED.json                    # Deployment addresses by network (currently empty)
+├── DEPLOYED.json                    # Live deployment addresses by network (sepolia, arbitrumSepolia, hardhat)
 ├── LICENSE.md                       # License file
 └── .env.example                     # Environment template (20+ variables)
 ```
@@ -265,7 +265,7 @@ The prediction mechanism uses percentage-based odds (0-100), not binary bets.
 3. Apply the bidirectional capital-adequacy constraints
 4. Return the two split boundaries plus any capped boundary amounts
 
-**Reference implementation:** `calculate.ts` at project root is a TypeScript implementation of the same algorithm, useful for off-chain simulation and testing.
+**Reference implementation:** `calculate.ts` at project root is a TypeScript reference-only implementation of the same algorithm, useful for off-chain simulation and understanding the logic. It is NOT used by the Solidity contracts or the SDK — the authoritative implementation lives in `PredictionMarket.sol`.
 
 **Locking** (`lockMarket` -> `_processLockRefunds`):
 
@@ -339,7 +339,9 @@ const client = new EVMPredictionClient({
 - Write methods return `TransactionResult { hash, receiptHash? }` - receiptHash populated only if publicClient provided
 - Constructor accepts `ContractAddresses { predictionMarket, stakeToken? }` - stakeToken is resolved on-chain and cached if not provided
 
-**Exported types:** `EVMPredictionClient`, `WalletContext`, `ContractAddresses`, `TransactionResult`, `CreateMarketParams`, `MarketState`, `PredictionMarket__factory`, `PredictionMarket` (typechain type)
+**Exported types:** `EVMPredictionClient`, `WalletContext`, `ContractAddresses`, `TransactionResult`, `CreateMarketParams`, `MarketState`, `LockRefundState`, `PredictionMarket__factory`, `PredictionMarket` (typechain type)
+
+**`LockRefundState`** (returned by `getLockRefunds`): `{ negativeBoundary: bigint, positiveBoundary: bigint, negativeAllowedAmount: bigint, positiveAllowedAmount: bigint }` — the market split boundaries and allowed amounts after lock processing.
 
 ### PredictionClient (src/unified/index.ts)
 
@@ -354,7 +356,7 @@ client.evm.placePrediction(wallet, marketId, 50, amount);
 client.getEvmClient().placePrediction(...);
 ```
 
-**Re-exports:** `ContractAddresses`, `WalletContext`, `TransactionResult`, `CreateMarketParams`, `MarketState`
+**Re-exports:** `ContractAddresses`, `WalletContext`, `TransactionResult`, `CreateMarketParams`, `MarketState`, `LockRefundState`
 
 ### Solana Client (src/solana/index.ts)
 
@@ -362,11 +364,11 @@ client.getEvmClient().placePrediction(...);
 
 ### React Hooks (src/react/)
 
-**Empty.** The `src/react/hooks/` directory exists but contains no files. No package.json export exists for `./react` (removed — will be added when hooks are implemented).
+**Empty Phase N placeholder.** The `src/react/hooks/` directory exists but contains no files. No package.json export exists for `./react` (removed — will be added when hooks are implemented). Do not add hooks here until a phase plan is defined.
 
 ### React Native (src/react-native/)
 
-No source files exist yet. The build target `tsconfig.react-native.json` is configured but the source directory is empty. The react-native export in package.json points to `dist/react-native/src/react-native/index.js`.
+**Empty Phase N placeholder.** No source files exist yet. The build target `tsconfig.react-native.json` is configured but the source directory is empty. The react-native export in package.json points to `dist/react-native/src/react-native/index.js`. Do not add source files here until a phase plan is defined.
 
 ## Deployment
 
@@ -475,7 +477,7 @@ Also exports:
 
 - `viem` >=2.0.0
 - `@solana/web3.js` >=1.95.0, `@solana/spl-token` >=0.4.0
-- `@sudobility/configs` ^0.0.63, `@sudobility/heavymath_types` ^0.0.7, `@sudobility/types` ^1.9.51
+- `@sudobility/configs` ^0.0.73, `@sudobility/heavymath_types` ^0.0.31, `@sudobility/types` ^1.9.62
 - `@tanstack/react-query` >=5.0.0
 - `react` ^18 || ^19, `react-native` >=0.70.0
 - `buffer` >=6.0.0, `text-encoding` >=0.7.0, `react-native-get-random-values` >=1.8.0, `react-native-url-polyfill` >=2.0.0
@@ -508,7 +510,11 @@ Also exports:
 - All three contracts have storage gaps (`__gap`) for upgrade safety: PredictionMarket[48], DealerNFT[48], OracleResolver[50].
 - All three contracts disable initializers in their constructors (`_disableInitializers()`).
 - `OracleResolver.markResolved()` is access-controlled: only the PredictionMarket contract or owner can call it. The PredictionMarket address must be set via `setPredictionMarket()` after deployment.
-- `DEPLOYED.json` is currently empty (no networks deployed). The deploy script writes to it.
+- `DEPLOYED.json` contains live deployment addresses for three networks:
+  - **sepolia** (deployed 2026-04-21): DealerNFT `0x995...`, OracleResolver `0x8a5...`, PredictionMarket `0x43a...` (upgraded 2026-04-21)
+  - **arbitrumSepolia** (deployed 2026-05-15): includes MockUSDC `0x132...` as stake token, DealerNFT, OracleResolver, PredictionMarket
+  - **hardhat** (deployed 2026-04-20): local test deployment with Hardhat default accounts
+  - The deploy script (`scripts/evm/deploy.ts`) writes/updates this file on each deployment.
 
 ## Ecosystem Context
 
