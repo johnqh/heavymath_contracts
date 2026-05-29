@@ -249,7 +249,7 @@ describe('PredictionMarket (USDC)', function () {
       const dealerAfter = await stakeToken.read.balanceOf([
         dealer1.account.address,
       ]);
-      expect(dealerAfter - dealerBefore).to.equal(8333333n);
+      expect(dealerAfter - dealerBefore).to.equal(4166666n);
 
       const ownerBefore = await stakeToken.read.balanceOf([
         owner.account.address,
@@ -258,7 +258,104 @@ describe('PredictionMarket (USDC)', function () {
       const ownerAfter = await stakeToken.read.balanceOf([
         owner.account.address,
       ]);
-      expect(ownerAfter - ownerBefore).to.equal(8333333n);
+      expect(ownerAfter - ownerBefore).to.equal(12500000n);
+    });
+
+    it('pays affiliate 10% of fee from system share when winner has affiliate', async function () {
+      const {
+        market,
+        dealer1,
+        predictor1,
+        predictor2,
+        predictor3,
+        publicClient,
+        stakeToken,
+        owner,
+      } = await deployPredictionFixture();
+      const block = await publicClient.getBlock();
+      const deadline = block.timestamp + 86401n;
+
+      await market.write.createMarket(
+        [1n, 1n, 1n, deadline, 'Affiliate test', ZERO_ORACLE_ID],
+        { account: dealer1.account }
+      );
+
+      // predictor1 bets 40% with predictor3 as affiliate
+      await market.write.placePrediction(
+        [1n, 40n, toUSDC('1000'), predictor3.account.address],
+        { account: predictor1.account }
+      );
+      // predictor2 bets 80% with no affiliate
+      await market.write.placePrediction([1n, 80n, toUSDC('1000')], {
+        account: predictor2.account,
+      });
+
+      await advanceTime(86401);
+      await market.write.lockMarket([1n]);
+      await market.write.resolveMarket([1n, true], {
+        account: dealer1.account,
+      });
+
+      // poolAfterLock = 1666.666666 USDC
+      // totalFee = 16.666666 USDC (1%)
+      // dealerFee = 16666666 * 25 / 100 = 4166666
+      // affiliateReserve = 16666666 * 1000 / 10000 = 1666666 (10% of totalFee)
+      // systemFee = 16666666 - 4166666 - 1666666 = 10833334
+
+      // Winner: predictor2 (no affiliate), gets full payout
+      const winnerBefore = await stakeToken.read.balanceOf([
+        predictor2.account.address,
+      ]);
+      const affiliateBefore = await stakeToken.read.balanceOf([
+        predictor3.account.address,
+      ]);
+      await market.write.claimWinnings([1n], { account: predictor2.account });
+      const winnerAfter = await stakeToken.read.balanceOf([
+        predictor2.account.address,
+      ]);
+      const affiliateAfterWinner = await stakeToken.read.balanceOf([
+        predictor3.account.address,
+      ]);
+      // Winner payout same as before (1650 USDC)
+      expect(winnerAfter - winnerBefore).to.equal(1650000000n);
+      // No affiliate payout for predictor2 (no affiliate set)
+      expect(affiliateAfterWinner - affiliateBefore).to.equal(0n);
+
+      // Dealer fees
+      await market.write.withdrawDealerFees([1n], { account: dealer1.account });
+
+      // System fees (reduced by affiliate reserve)
+      const ownerBefore = await stakeToken.read.balanceOf([
+        owner.account.address,
+      ]);
+      await market.write.withdrawSystemFees({ account: owner.account });
+      const ownerAfter = await stakeToken.read.balanceOf([
+        owner.account.address,
+      ]);
+      // System gets 10833334 (75% minus 10% affiliate reserve)
+      expect(ownerAfter - ownerBefore).to.equal(10833334n);
+    });
+
+    it('rejects self-referral as affiliate', async function () {
+      const { market, dealer1, predictor1, publicClient } =
+        await deployPredictionFixture();
+      const block = await publicClient.getBlock();
+      const deadline = block.timestamp + 86401n;
+
+      await market.write.createMarket(
+        [1n, 1n, 1n, deadline, 'Self-ref test', ZERO_ORACLE_ID],
+        { account: dealer1.account }
+      );
+
+      try {
+        await market.write.placePrediction(
+          [1n, 50n, toUSDC('100'), predictor1.account.address],
+          { account: predictor1.account }
+        );
+        expect.fail('Should have reverted');
+      } catch (error: any) {
+        expect(error.message).to.include('Self-referral');
+      }
     });
 
     it('resolves with the auto-computed split', async function () {

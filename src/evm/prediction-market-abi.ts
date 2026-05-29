@@ -124,6 +124,37 @@ export const PREDICTION_MARKET_ABI = [
       {
         indexed: true,
         internalType: 'address',
+        name: 'affiliate',
+        type: 'address',
+      },
+      {
+        indexed: true,
+        internalType: 'address',
+        name: 'predictor',
+        type: 'address',
+      },
+      {
+        indexed: false,
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
+      },
+    ],
+    name: 'AffiliatePaid',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
+      },
+      {
+        indexed: true,
+        internalType: 'address',
         name: 'dealer',
         type: 'address',
       },
@@ -264,6 +295,18 @@ export const PREDICTION_MARKET_ABI = [
         internalType: 'string',
         name: 'description',
         type: 'string',
+      },
+      {
+        indexed: false,
+        internalType: 'bytes32',
+        name: 'oracleId',
+        type: 'bytes32',
+      },
+      {
+        indexed: false,
+        internalType: 'bytes32',
+        name: 'conditionData',
+        type: 'bytes32',
       },
     ],
     name: 'MarketCreated',
@@ -574,6 +617,51 @@ export const PREDICTION_MARKET_ABI = [
     type: 'function',
   },
   {
+    inputs: [],
+    name: 'affiliateFeeBps',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    name: 'affiliateReserves',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'authorizedResolver',
+    outputs: [
+      {
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
     inputs: [
       {
         internalType: 'uint256',
@@ -583,11 +671,31 @@ export const PREDICTION_MARKET_ABI = [
     ],
     name: 'calculateMarketSplit',
     outputs: [
-      { internalType: 'uint256', name: 'negPct', type: 'uint256' },
-      { internalType: 'uint256', name: 'posPct', type: 'uint256' },
-      { internalType: 'uint256', name: 'negAmt', type: 'uint256' },
-      { internalType: 'uint256', name: 'posAmt', type: 'uint256' },
-      { internalType: 'bool', name: 'valid', type: 'bool' },
+      {
+        internalType: 'uint256',
+        name: 'negPct',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'posPct',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'negAmt',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'posAmt',
+        type: 'uint256',
+      },
+      {
+        internalType: 'bool',
+        name: 'valid',
+        type: 'bool',
+      },
     ],
     stateMutability: 'view',
     type: 'function',
@@ -672,6 +780,19 @@ export const PREDICTION_MARKET_ABI = [
     inputs: [
       {
         internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
+      },
+    ],
+    name: 'completeOracleResolution',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'uint256',
         name: 'tokenId',
         type: 'uint256',
       },
@@ -702,6 +823,55 @@ export const PREDICTION_MARKET_ABI = [
       },
     ],
     name: 'createMarket',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'uint256',
+        name: 'tokenId',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'category',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'subCategory',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'deadline',
+        type: 'uint256',
+      },
+      {
+        internalType: 'string',
+        name: 'description',
+        type: 'string',
+      },
+      {
+        internalType: 'bytes32',
+        name: 'oracleId',
+        type: 'bytes32',
+      },
+      {
+        internalType: 'bytes32',
+        name: 'conditionData',
+        type: 'bytes32',
+      },
+    ],
+    name: 'createMarketWithCondition',
     outputs: [
       {
         internalType: 'uint256',
@@ -944,6 +1114,25 @@ export const PREDICTION_MARKET_ABI = [
         type: 'uint256',
       },
     ],
+    name: 'marketHasAffiliates',
+    outputs: [
+      {
+        internalType: 'bool',
+        name: '',
+        type: 'bool',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
     name: 'marketPools',
     outputs: [
       {
@@ -1023,6 +1212,11 @@ export const PREDICTION_MARKET_ABI = [
       {
         internalType: 'bytes32',
         name: 'oracleId',
+        type: 'bytes32',
+      },
+      {
+        internalType: 'bytes32',
+        name: 'conditionData',
         type: 'bytes32',
       },
     ],
@@ -1116,6 +1310,34 @@ export const PREDICTION_MARKET_ABI = [
         name: 'amount',
         type: 'uint256',
       },
+      {
+        internalType: 'address',
+        name: 'affiliate',
+        type: 'address',
+      },
+    ],
+    name: 'placePrediction',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'percentage',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
+      },
     ],
     name: 'placePrediction',
     outputs: [],
@@ -1157,6 +1379,11 @@ export const PREDICTION_MARKET_ABI = [
         name: 'claimed',
         type: 'bool',
       },
+      {
+        internalType: 'address',
+        name: 'affiliate',
+        type: 'address',
+      },
     ],
     stateMutability: 'view',
     type: 'function',
@@ -1188,6 +1415,19 @@ export const PREDICTION_MARKET_ABI = [
         name: 'marketId',
         type: 'uint256',
       },
+    ],
+    name: 'requestOracleResolution',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
+      },
       {
         internalType: 'bool',
         name: 'positiveOutcome',
@@ -1195,6 +1435,24 @@ export const PREDICTION_MARKET_ABI = [
       },
     ],
     name: 'resolveMarket',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'uint256',
+        name: 'marketId',
+        type: 'uint256',
+      },
+      {
+        internalType: 'bool',
+        name: 'positiveOutcome',
+        type: 'bool',
+      },
+    ],
+    name: 'resolveMarketByResolver',
     outputs: [],
     stateMutability: 'nonpayable',
     type: 'function',
@@ -1216,11 +1474,24 @@ export const PREDICTION_MARKET_ABI = [
     inputs: [
       {
         internalType: 'uint256',
-        name: '_dealerSharePercent',
+        name: '_affiliateFeeBps',
         type: 'uint256',
       },
     ],
-    name: 'setDealerSharePercent',
+    name: 'setAffiliateFeeBps',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: '_resolver',
+        type: 'address',
+      },
+    ],
+    name: 'setAuthorizedResolver',
     outputs: [],
     stateMutability: 'nonpayable',
     type: 'function',
@@ -1229,11 +1500,11 @@ export const PREDICTION_MARKET_ABI = [
     inputs: [
       {
         internalType: 'uint256',
-        name: '_winnerFeeBps',
+        name: '_dealerSharePercent',
         type: 'uint256',
       },
     ],
-    name: 'setWinnerFeeBps',
+    name: 'setDealerSharePercent',
     outputs: [],
     stateMutability: 'nonpayable',
     type: 'function',
@@ -1252,6 +1523,19 @@ export const PREDICTION_MARKET_ABI = [
     type: 'function',
   },
   {
+    inputs: [
+      {
+        internalType: 'uint256',
+        name: '_winnerFeeBps',
+        type: 'uint256',
+      },
+    ],
+    name: 'setWinnerFeeBps',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
     inputs: [],
     name: 'stakeToken',
     outputs: [
@@ -1265,16 +1549,21 @@ export const PREDICTION_MARKET_ABI = [
     type: 'function',
   },
   {
-    inputs: [],
-    name: 'testMode',
-    outputs: [
+    inputs: [
       {
-        internalType: 'bool',
-        name: '',
-        type: 'bool',
+        internalType: 'address',
+        name: 'to',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
       },
     ],
-    stateMutability: 'view',
+    name: 'sweepExcessTokens',
+    outputs: [],
+    stateMutability: 'nonpayable',
     type: 'function',
   },
   {
@@ -1291,6 +1580,19 @@ export const PREDICTION_MARKET_ABI = [
         internalType: 'uint256',
         name: '',
         type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'testMode',
+    outputs: [
+      {
+        internalType: 'bool',
+        name: '',
+        type: 'bool',
       },
     ],
     stateMutability: 'view',

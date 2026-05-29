@@ -83,6 +83,7 @@ contract PredictionMarket is
         uint256 percentage; // Predicted percentage (0-100)
         uint256 placedAt; // Timestamp when prediction was placed
         bool claimed; // Whether winnings have been claimed
+        address affiliate; // Optional affiliate wallet (earns share of fee if predictor wins)
     }
 
     /// @notice Market split info after locking
@@ -193,6 +194,13 @@ contract PredictionMarket is
 
     event SystemFeesWithdrawn(address indexed recipient, uint256 amount);
 
+    event AffiliatePaid(
+        uint256 indexed marketId,
+        address indexed affiliate,
+        address indexed predictor,
+        uint256 amount
+    );
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -220,7 +228,8 @@ contract PredictionMarket is
         marketCounter = 0;
 
         winnerFeeBps = 100; // 1%
-        dealerSharePercent = 50; // 50/50 split
+        dealerSharePercent = 25; // 25% dealer, remainder to system
+        affiliateFeeBps = 1000; // 10% of total fee
         testMode = false;
     }
 
@@ -229,6 +238,12 @@ contract PredictionMarket is
      * @param _testMode true to allow locking/resolving without waiting for deadline
      */
     function setTestMode(bool _testMode) external onlyOwner {
+        if (_testMode) {
+            require(
+                block.chainid == 31337 || block.chainid == 11155111 || block.chainid == 421614,
+                "Test mode not allowed on this chain"
+            );
+        }
         testMode = _testMode;
     }
 
@@ -260,6 +275,15 @@ contract PredictionMarket is
         uint256 old = dealerSharePercent;
         dealerSharePercent = _dealerSharePercent;
         emit DealerSharePercentUpdated(old, _dealerSharePercent);
+    }
+
+    /**
+     * @notice Set the affiliate fee in basis points (owner only)
+     * @param _affiliateFeeBps Basis points (e.g. 1000 = 10%)
+     */
+    function setAffiliateFeeBps(uint256 _affiliateFeeBps) external onlyOwner {
+        require(_affiliateFeeBps <= 5000, "Fee too high"); // max 50%
+        affiliateFeeBps = _affiliateFeeBps;
     }
 
     /**
@@ -375,15 +399,35 @@ contract PredictionMarket is
     }
 
     /**
-     * @notice Place a prediction on a market
+     * @notice Place a prediction on a market (no affiliate)
      * @param marketId Market ID
      * @param percentage Predicted percentage (0-100)
+     * @param amount Amount to bet
      */
     function placePrediction(uint256 marketId, uint256 percentage, uint256 amount)
         external
         whenNotPaused
         nonReentrant
     {
+        _placePrediction(marketId, percentage, amount, address(0));
+    }
+
+    /**
+     * @notice Place a prediction on a market with an affiliate
+     * @param marketId Market ID
+     * @param percentage Predicted percentage (0-100)
+     * @param amount Amount to bet
+     * @param affiliate Affiliate wallet that earns a share of fees if this predictor wins
+     */
+    function placePrediction(uint256 marketId, uint256 percentage, uint256 amount, address affiliate)
+        external
+        whenNotPaused
+        nonReentrant
+    {
+        _placePrediction(marketId, percentage, amount, affiliate);
+    }
+
+    function _placePrediction(uint256 marketId, uint256 percentage, uint256 amount, address affiliate) internal {
         Market storage market = markets[marketId];
         require(market.status == MarketStatus.Active, "Market not active");
         require(block.timestamp < market.deadline, "Market closed");
@@ -401,6 +445,12 @@ contract PredictionMarket is
         prediction.percentage = percentage;
         prediction.placedAt = block.timestamp;
         prediction.claimed = false;
+        prediction.affiliate = affiliate;
+
+        if (affiliate != address(0)) {
+            require(affiliate != msg.sender, "Self-referral");
+            marketHasAffiliates[marketId] = true;
+        }
 
         // Update percentage totals and market pool
         percentageTotals[marketId][percentage] += amount;
@@ -600,6 +650,7 @@ contract PredictionMarket is
      * @dev DEPRECATED: Use resolveMarketByResolver for authorized resolver flow
      */
     function resolveMarketWithOracle(uint256 marketId) external {
+        require(msg.sender == authorizedResolver || msg.sender == owner(), "Not authorized");
         Market storage market = markets[marketId];
         require(market.status == MarketStatus.Locked, "Market not locked");
         require(market.oracleId != bytes32(0), "No oracle configured");
@@ -992,6 +1043,21 @@ contract PredictionMarket is
         // Transfer payout
         stakeToken.safeTransfer(msg.sender, payout);
 
+        // Pay affiliate if exists
+        if (prediction.affiliate != address(0) && affiliateFeeBps > 0) {
+            uint256 distributablePool = _getDistributablePool(marketId);
+            (uint256 totalFee,,) = _calculateFees(distributablePool);
+            uint256 totalWinningBets = _calculateTotalWinningBets(marketId);
+            uint256 effectiveAmount = _getEffectiveAmount(marketId, prediction.amount, prediction.percentage);
+            uint256 proportionalFee = (effectiveAmount * totalFee) / totalWinningBets;
+            uint256 affiliatePayout = (proportionalFee * affiliateFeeBps) / 10000;
+
+            if (affiliatePayout > 0) {
+                stakeToken.safeTransfer(prediction.affiliate, affiliatePayout);
+                emit AffiliatePaid(marketId, prediction.affiliate, msg.sender, affiliatePayout);
+            }
+        }
+
         emit WinningsClaimed(marketId, msg.sender, payout);
     }
 
@@ -1040,14 +1106,25 @@ contract PredictionMarket is
         if (feeAmount == 0) {
             // Calculate and store fees on first call
             uint256 distributablePool = _getDistributablePool(marketId);
-            (, uint256 dealerFee, uint256 systemFee) = _calculateFees(distributablePool);
+            (uint256 totalFee, uint256 dealerFee, uint256 systemFee) = _calculateFees(distributablePool);
 
             feeAmount = dealerFee;
             dealerFees[marketId] = feeAmount;
 
-            // Store system fee
-            systemFees[marketId] = systemFee;
-            totalSystemFees += systemFee;
+            // Reserve affiliate fees for markets with affiliates
+            uint256 affiliateReserve = 0;
+            if (marketHasAffiliates[marketId] && affiliateFeeBps > 0) {
+                affiliateReserve = (totalFee * affiliateFeeBps) / 10000;
+                if (affiliateReserve > systemFee) {
+                    affiliateReserve = systemFee;
+                }
+                affiliateReserves[marketId] = affiliateReserve;
+            }
+
+            // Store system fee (after affiliate reserve deduction)
+            uint256 netSystemFee = systemFee - affiliateReserve;
+            systemFees[marketId] = netSystemFee;
+            totalSystemFees += netSystemFee;
         }
 
         require(feeAmount > 0, "No fees");
@@ -1073,6 +1150,20 @@ contract PredictionMarket is
         stakeToken.safeTransfer(msg.sender, amount);
 
         emit SystemFeesWithdrawn(msg.sender, amount);
+    }
+
+    /**
+     * @notice Sweep excess tokens from the contract (owner only)
+     * @param to Recipient address
+     * @param amount Amount to sweep
+     * @dev Used to recover rounding dust that accumulates from integer division
+     * in payout and refund calculations. The owner must compute the safe
+     * sweep amount off-chain to avoid withdrawing obligated funds.
+     */
+    function sweepExcessTokens(address to, uint256 amount) external onlyOwner nonReentrant {
+        require(to != address(0), "Invalid address");
+        require(amount > 0, "Amount zero");
+        stakeToken.safeTransfer(to, amount);
     }
 
     // ========== PAYOUT CALCULATION ==========
@@ -1255,6 +1346,9 @@ contract PredictionMarket is
      * @return totalFee Total fee amount
      * @return dealerFee Dealer's share of the fee
      * @return systemFee Platform's share of the fee
+     * @dev Two sequential integer divisions cause minor truncation (up to 1 wei each).
+     * systemFee is computed as totalFee - dealerFee to ensure no fee tokens are lost.
+     * Rounding dust from payout divisions (up to num_winners - 1 wei) remains in the contract.
      */
     function _calculateFees(uint256 distributablePool)
         internal
@@ -1286,8 +1380,19 @@ contract PredictionMarket is
     /// @notice Authorized resolver address (can resolve oracle markets directly)
     address public authorizedResolver;
 
+    /// @notice Affiliate fee in basis points (e.g. 1000 = 10% of total fee)
+    uint256 public affiliateFeeBps;
+
+    /// @notice Whether a market has any predictions with affiliates
+    mapping(uint256 => bool) public marketHasAffiliates;
+
+    /// @notice Reserved affiliate fee amount per market
+    mapping(uint256 => uint256) public affiliateReserves;
+
     /**
-     * @dev Storage gap for future upgrades (reduced from 45 to 44)
+     * @dev Storage gap for future upgrades.
+     * Original gap: 48. Consumed: 2 mappings (2 slots) + bool+address packed (1 slot)
+     * + uint256 (1 slot) + 2 mappings (2 slots) = 6 slots.
      */
-    uint256[44] private __gap;
+    uint256[42] private __gap;
 }

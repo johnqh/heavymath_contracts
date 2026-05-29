@@ -184,21 +184,36 @@ export class EVMPredictionClient {
     return this.execute(wallet, 'setDealerSharePercent', [percent]);
   }
 
+  async setAffiliateFeeBps(
+    wallet: WalletContext,
+    feeBps: bigint
+  ): Promise<TransactionResult> {
+    return this.execute(wallet, 'setAffiliateFeeBps', [feeBps]);
+  }
+
+  async sweepExcessTokens(
+    wallet: WalletContext,
+    to: `0x${string}`,
+    amount: bigint
+  ): Promise<TransactionResult> {
+    return this.execute(wallet, 'sweepExcessTokens', [to, amount]);
+  }
+
   async placePrediction(
     wallet: WalletContext,
     marketId: bigint,
     percentage: number,
-    amount: bigint
+    amount: bigint,
+    affiliate?: `0x${string}`
   ): Promise<TransactionResult> {
     if (!Number.isInteger(percentage) || percentage < 0 || percentage > 100) {
       throw new Error('percentage must be an integer between 0 and 100');
     }
     await this.ensureAllowance(wallet, amount);
-    return this.execute(wallet, 'placePrediction', [
-      marketId,
-      BigInt(percentage),
-      amount,
-    ]);
+    const args: readonly unknown[] = affiliate
+      ? [marketId, BigInt(percentage), amount, affiliate]
+      : [marketId, BigInt(percentage), amount];
+    return this.execute(wallet, 'placePrediction', args);
   }
 
   async updatePrediction(
