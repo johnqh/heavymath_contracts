@@ -62,7 +62,7 @@ bun run clean                  # npx hardhat clean
 ```
 heavymath_contracts/
 ├── contracts/                       # Solidity source
-│   ├── PredictionMarket.sol             # Core market logic (~1293 lines, UUPS upgradeable)
+│   ├── PredictionMarket.sol             # Core market logic (~1398 lines, UUPS upgradeable)
 │   ├── DealerNFT.sol                    # ERC721 license system (~306 lines, UUPS upgradeable)
 │   ├── OracleResolver.sol               # Oracle + Chainlink integration (~466 lines, UUPS upgradeable)
 │   ├── MockUSDC.sol                     # Test ERC20 token (6 decimals, 21 lines)
@@ -72,13 +72,12 @@ heavymath_contracts/
 ├── src/                             # TypeScript SDK
 │   ├── evm/index.ts                     # EVMPredictionClient (full implementation)
 │   ├── unified/index.ts                 # PredictionClient (wraps EVMPredictionClient)
-│   ├── solana/index.ts                  # Empty shell ("Will be implemented in Phase 11")
-│   ├── react/hooks/                     # Empty directory - reserved for React hooks
-│   └── utils/                           # Empty directory - reserved for shared utilities
+│   └── solana/index.ts                  # Empty shell ("Will be implemented in Phase 11")
 ├── test/evm/                        # Hardhat/Mocha test suites
 │   ├── PredictionMarket.test.ts         # Market lifecycle tests
 │   ├── DealerNFT.test.ts               # NFT permission tests
 │   ├── SplitUSDC.test.ts                # Market split algorithm tests
+│   ├── Calculate.test.ts                # Market split calculation tests
 │   ├── ClientIntegration.test.ts        # SDK integration tests
 │   └── utils/fixture.ts                # Shared test fixture (deployPredictionFixture)
 ├── scripts/evm/                     # Deployment & upgrade scripts
@@ -112,7 +111,7 @@ The package has multiple entry points for different environments:
 
 ## Smart Contracts
 
-### PredictionMarket.sol (Core - ~1293 lines)
+### PredictionMarket.sol (Core - ~1398 lines)
 
 **Inheritance chain:**
 `Initializable` -> `OwnableUpgradeable` -> `PausableUpgradeable` -> `UUPSUpgradeable` -> `ReentrancyGuardUpgradeable`
@@ -304,7 +303,7 @@ const client = new EVMPredictionClient({
 });
 ```
 
-**All methods (19 write + 6 read):**
+**All methods (21 write + 6 read):**
 
 | Method                                                                | Description                                                            |
 | --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -327,6 +326,8 @@ const client = new EVMPredictionClient({
 | `claimRefund(wallet, marketId)`                                       | Claim refund (cancelled/abandoned)                                     |
 | `withdrawDealerFees(wallet, marketId)`                                | Withdraw dealer fees                                                   |
 | `withdrawSystemFees(wallet)`                                          | Withdraw system fees (owner)                                           |
+| `setAffiliateFeeBps(wallet, feeBps)`                                  | Set affiliate fee in basis points (owner)                              |
+| `sweepExcessTokens(wallet, to, amount)`                               | Withdraw excess tokens from contract (owner)                           |
 | `calculateMarketSplit(publicClient, marketId)`                        | Read market split boundaries (view)                                    |
 | `getLockRefundAmount(publicClient, marketId, predictor)`              | Read lock refund amount for predictor (view)                           |
 | `getLockRefunds(publicClient, marketId)`                              | Read all lock refund data (view)                                       |
@@ -364,11 +365,11 @@ client.getEvmClient().placePrediction(...);
 
 ### React Hooks (src/react/)
 
-**Empty Phase N placeholder.** The `src/react/hooks/` directory exists but contains no files. No package.json export exists for `./react` (removed — will be added when hooks are implemented). Do not add hooks here until a phase plan is defined.
+**Empty Phase N placeholder.** The `src/react/` directory does not exist yet. No package.json export exists for `./react` (removed — will be added when hooks are implemented). Do not add hooks here until a phase plan is defined.
 
 ### React Native (src/react-native/)
 
-**Empty Phase N placeholder.** No source files exist yet. The build target `tsconfig.react-native.json` is configured but the source directory is empty. The react-native export in package.json points to `dist/react-native/src/react-native/index.js`. Do not add source files here until a phase plan is defined.
+**Empty Phase N placeholder.** The `src/react-native/` directory does not exist yet. The build target `tsconfig.react-native.json` is configured but the source directory is empty. The react-native export in package.json points to `dist/react-native/src/react-native/index.js`. Do not add source files here until a phase plan is defined.
 
 ## Deployment
 
@@ -429,16 +430,17 @@ The hardhat config loads `.env` first, then `.env.local` as fallback (override: 
 
 ## Supported Networks (hardhat.config.cts)
 
-| Network   | Chain ID | RPC Source                                         |
-| --------- | -------- | -------------------------------------------------- |
-| hardhat   | 1337     | In-process                                         |
-| localhost | 1337     | http://127.0.0.1:8545                              |
-| mainnet   | 1        | Alchemy (eth-mainnet)                              |
-| sepolia   | 11155111 | SEPOLIA_RPC_URL or Alchemy or public node fallback |
-| polygon   | 137      | Alchemy (polygon-mainnet)                          |
-| optimism  | 10       | Alchemy (opt-mainnet)                              |
-| arbitrum  | 42161    | Alchemy (arb-mainnet)                              |
-| base      | 8453     | Alchemy (base-mainnet)                             |
+| Network         | Chain ID | RPC Source                                         |
+| --------------- | -------- | -------------------------------------------------- |
+| hardhat         | 1337     | In-process                                         |
+| localhost       | 1337     | http://127.0.0.1:8545                              |
+| mainnet         | 1        | Alchemy (eth-mainnet)                              |
+| sepolia         | 11155111 | SEPOLIA_RPC_URL or Alchemy or public node fallback |
+| polygon         | 137      | Alchemy (polygon-mainnet)                          |
+| optimism        | 10       | Alchemy (opt-mainnet)                              |
+| arbitrum        | 42161    | Alchemy (arb-mainnet)                              |
+| base            | 8453     | Alchemy (base-mainnet)                             |
+| arbitrumSepolia | 421614   | Alchemy (arb-sepolia)                              |
 
 Solidity compiler: 0.8.24 with optimizer enabled (200 runs).
 TypeChain target: ethers-v6.
@@ -477,7 +479,7 @@ Also exports:
 
 - `viem` >=2.0.0
 - `@solana/web3.js` >=1.95.0, `@solana/spl-token` >=0.4.0
-- `@sudobility/configs` ^0.0.73, `@sudobility/heavymath_types` ^0.0.31, `@sudobility/types` ^1.9.62
+- `@sudobility/configs` ^0.0.73, `@sudobility/heavymath_types` ^0.0.32, `@sudobility/types` ^1.9.62
 - `@tanstack/react-query` >=5.0.0
 - `react` ^18 || ^19, `react-native` >=0.70.0
 - `buffer` >=6.0.0, `text-encoding` >=0.7.0, `react-native-get-random-values` >=1.8.0, `react-native-url-polyfill` >=2.0.0
