@@ -318,7 +318,7 @@ describe('Market Split algorithm (USDC)', function () {
       expect(data[8]).to.equal(4); // Locked
     });
 
-    it('C2: all bets at same percentage — lockMarket reverts', async function () {
+    it('C2: all bets at same percentage — lockMarket auto-abandons', async function () {
       const { market, predictor1, predictor2, marketId } = await setupMarket();
 
       await market.write.placePrediction([marketId, 50n, toUSDC('100')], {
@@ -330,15 +330,12 @@ describe('Market Split algorithm (USDC)', function () {
 
       await advanceTime(86401);
 
-      try {
-        await market.write.lockMarket([marketId]);
-        expect.fail('Should have reverted');
-      } catch (error: any) {
-        expect(error.message).to.include('No valid market split');
-      }
+      await market.write.lockMarket([marketId]);
+      const data = await market.read.markets([marketId]);
+      expect(data[8]).to.equal(3); // Abandoned
     });
 
-    it('C3: single prediction — lockMarket reverts', async function () {
+    it('C3: single prediction — lockMarket auto-abandons', async function () {
       const { market, predictor1, marketId } = await setupMarket();
 
       await market.write.placePrediction([marketId, 50n, toUSDC('100')], {
@@ -347,15 +344,12 @@ describe('Market Split algorithm (USDC)', function () {
 
       await advanceTime(86401);
 
-      try {
-        await market.write.lockMarket([marketId]);
-        expect.fail('Should have reverted');
-      } catch (error: any) {
-        expect(error.message).to.include('No valid market split');
-      }
+      await market.write.lockMarket([marketId]);
+      const data = await market.read.markets([marketId]);
+      expect(data[8]).to.equal(3); // Abandoned
     });
 
-    it('C4: three predictions at same percentage — lockMarket reverts', async function () {
+    it('C4: three predictions at same percentage — lockMarket auto-abandons', async function () {
       const { market, predictor1, predictor2, predictor3, marketId } =
         await setupMarket();
 
@@ -371,12 +365,9 @@ describe('Market Split algorithm (USDC)', function () {
 
       await advanceTime(86401);
 
-      try {
-        await market.write.lockMarket([marketId]);
-        expect.fail('Should have reverted');
-      } catch (error: any) {
-        expect(error.message).to.include('No valid market split');
-      }
+      await market.write.lockMarket([marketId]);
+      const data = await market.read.markets([marketId]);
+      expect(data[8]).to.equal(3); // Abandoned
     });
   });
 

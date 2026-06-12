@@ -146,7 +146,7 @@ describe('PredictionMarket (USDC)', function () {
       expect(marketData[8]).to.equal(2); // resolved
     });
 
-    it('reverts locking one-sided market', async function () {
+    it('auto-abandons one-sided market on lock', async function () {
       const { market, dealer1, predictor1, publicClient } =
         await deployPredictionFixture();
       const block = await publicClient.getBlock();
@@ -163,14 +163,9 @@ describe('PredictionMarket (USDC)', function () {
 
       await advanceTime(86401);
 
-      let reverted = false;
-      try {
-        await market.write.lockMarket([1n]);
-      } catch (error: any) {
-        reverted = true;
-        expect(error.message).to.include('revert');
-      }
-      expect(reverted).to.equal(true);
+      await market.write.lockMarket([1n]);
+      const data = await market.read.markets([1n]);
+      expect(data[8]).to.equal(3); // Abandoned (auto-abandon on one-sided market)
     });
 
     it('allows abandonment with refunds when dealer/oracle stalled', async function () {

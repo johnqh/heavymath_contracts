@@ -533,7 +533,14 @@ contract PredictionMarket is
         require(testMode || block.timestamp >= market.deadline, "Market still active");
 
         (uint256 negPct, uint256 posPct, uint256 negAmt, uint256 posAmt, bool valid) = calculateMarketSplit(marketId);
-        require(valid, "No valid market split");
+
+        if (!valid) {
+            // No valid split (< 2 percentage levels or no satisfiable boundary pair)
+            // Abandon the market so all bettors can claim full refunds via claimRefund()
+            market.status = MarketStatus.Abandoned;
+            emit MarketAbandoned(marketId);
+            return;
+        }
 
         _lockWithSplit(marketId, negPct, posPct, negAmt, posAmt);
     }

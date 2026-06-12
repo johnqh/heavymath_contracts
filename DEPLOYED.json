@@ -36,7 +36,9 @@
         "proxy": "0x54d7a17145332a38b329afe0ff1f92ec2583f67d"
       },
       "predictionMarket": {
-        "proxy": "0x12e3c2199b83f653436339293df5982872b89561"
+        "proxy": "0x12e3c2199b83f653436339293df5982872b89561",
+        "implementation": "0x7017de2c11c57adae19f4f14d651ed20ab525d18",
+        "upgradedAt": "2026-06-12T00:48:47.799Z"
       },
       "dealerNFTMinted": "tokenId 1 to deployer"
     },
