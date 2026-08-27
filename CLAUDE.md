@@ -1,5 +1,10 @@
 # CLAUDE.md - Heavymath Contracts
 
+> **Git policy — never auto-commit or auto-push.** Leave your work in the working tree.
+> Run `git commit`, `git push`, `gh pr create`, or `scripts/push_all.sh` **only when the user
+> explicitly asks in that turn**. Approval for an earlier change does not carry forward, and
+> finishing a task is not permission to commit it.
+
 This file provides context for Claude Code when working on this project.
 
 ## Project Overview
@@ -556,3 +561,7 @@ heavymath_app        (React + Vite web frontend)
 ### Why viem (not ethers)
 
 The SDK (`src/evm/index.ts`) uses **viem** for all contract interactions because the downstream app uses wagmi (which is built on viem). The `ethers` dependency exists **only** for TypeChain type generation during the Hardhat build. Never add ethers-based code to the SDK.
+
+## Git Workflow
+
+- Do not use feature branches for code changes. Always stay on the current branch.
