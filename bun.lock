@@ -19,9 +19,9 @@
         "@solana/spl-token": "^0.4.14",
         "@solana/wallet-adapter-base": "^0.9.27",
         "@solana/web3.js": "^1.98.4",
-        "@sudobility/configs": "^0.0.76",
+        "@sudobility/configs": "^0.0.77",
         "@sudobility/heavymath_types": "^0.0.36",
-        "@sudobility/types": "^1.9.67",
+        "@sudobility/types": "^1.9.68",
         "@tanstack/react-query": "^5.90.1",
         "@typechain/ethers-v6": "^0.5.1",
         "@typechain/hardhat": "^9.1.0",
@@ -51,9 +51,9 @@
       "peerDependencies": {
         "@solana/spl-token": ">=0.4.0",
         "@solana/web3.js": ">=1.95.0",
-        "@sudobility/configs": "^0.0.76",
+        "@sudobility/configs": "^0.0.77",
         "@sudobility/heavymath_types": "^0.0.36",
-        "@sudobility/types": "^1.9.67",
+        "@sudobility/types": "^1.9.68",
         "@tanstack/react-query": ">=5.0.0",
         "buffer": ">=6.0.0",
         "react": "^18.0.0 || ^19.0.0",
@@ -580,11 +580,11 @@
 
     "@solidity-parser/parser": ["@solidity-parser/parser@0.20.2", "", {}, "sha512-rbu0bzwNvMcwAjH86hiEAcOeRI2EeK8zCkHDrFykh/Al8mvJeFmjy3UrE7GYQjNwOgbGUUtCn5/k8CB8zIu7QA=="],
 
-    "@sudobility/configs": ["@sudobility/configs@0.0.76", "", { "peerDependencies": { "@sudobility/types": "^1.9.67" } }, "sha512-KX67FooiqzwUoa+Cm2UKIdMBUmwlgLEnn9sNBla5xXv60ZlW055anmVSC7+yxQ2Kz3tMFj0Sf9llRJ1VSqaylA=="],
+    "@sudobility/configs": ["@sudobility/configs@0.0.77", "", { "peerDependencies": { "@sudobility/types": "^1.9.68" } }, "sha512-7qpwuMfIjmJQ0C6jkFa0LrjWXPeYKpwRDIzZgwi+8bMBx+ii3mexMiWnb1gTONn0qU6S9KNOPG2knLypWNiiSg=="],
 
     "@sudobility/heavymath_types": ["@sudobility/heavymath_types@0.0.36", "", { "peerDependencies": { "viem": "^2.0.0" }, "optionalPeers": ["viem"] }, "sha512-ssk7/qhnoknWy3ICO2fV0FrObp3qLoM8Ei6a24Uh/oszGcsxg6LElH6Sye9GiTyiLYIUR9xijQpDIzX0Xfy2OQ=="],
 
-    "@sudobility/types": ["@sudobility/types@1.9.67", "", {}, "sha512-d+jk4L9i8VNvOnCJW/craqiiUTPH5aRq4KYe/QBrBU3mCcTfoYjgzzXopVQRcthiZ5dwQAEpdqCTQ0gAWRN6Ww=="],
+    "@sudobility/types": ["@sudobility/types@1.9.68", "", {}, "sha512-4LL5+UfcqQcc0PKKR/z/PqS6j9DQPVkkjL+3oOW+Bwx0TAu1SVKAlPhlt/9ruNMW+abcHuZoFvbOVD5gdYBSGw=="],
 
     "@swc/helpers": ["@swc/helpers@0.5.18", "", { "dependencies": { "tslib": "^2.8.0" } }, "sha512-TXTnIcNJQEKwThMMqBXsZ4VGAza6bvN4pa41Rkqoio6QBKMvo+5lexeTMScGCIxtzgQJzElcvIltani+adC5PQ=="],
 
